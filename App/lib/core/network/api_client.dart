@@ -1,0 +1,97 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../../config/app_config.dart';
+import '../errors/app_exception.dart';
+
+typedef TokenReader = Future<String?> Function();
+
+class ApiClient {
+  ApiClient({
+    http.Client? httpClient,
+    TokenReader? tokenReader,
+    String? baseUrl,
+  })  : _httpClient = httpClient ?? http.Client(),
+        _tokenReader = tokenReader,
+        _baseUrl = baseUrl ?? AppConfig.apiBaseUrl;
+
+  final http.Client _httpClient;
+  final TokenReader? _tokenReader;
+  final String _baseUrl;
+
+  Future<Map<String, String>> _headers({bool auth = true}) async {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    if (auth && _tokenReader != null) {
+      final token = await _tokenReader();
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+    }
+    return headers;
+  }
+
+  Uri _uri(String path, [Map<String, dynamic>? query]) {
+    final cleanPath = path.startsWith('/') ? path : '/$path';
+    final uri = Uri.parse('$_baseUrl$cleanPath');
+    final queryParams = query?.map((key, value) => MapEntry(key, '$value'))
+      ..removeWhere((_, value) => value.isEmpty || value == 'null');
+    return uri.replace(queryParameters: queryParams?.isEmpty ?? true ? null : queryParams);
+  }
+
+  Future<dynamic> get(String path, {Map<String, dynamic>? query, bool auth = true}) async {
+    final response = await _httpClient.get(_uri(path, query), headers: await _headers(auth: auth));
+    return _decode(response);
+  }
+
+  Future<dynamic> post(String path, {Map<String, dynamic>? body, bool auth = true}) async {
+    final response = await _httpClient.post(
+      _uri(path),
+      headers: await _headers(auth: auth),
+      body: jsonEncode(body ?? {}),
+    );
+    return _decode(response);
+  }
+
+  Future<dynamic> put(String path, {Map<String, dynamic>? body, bool auth = true}) async {
+    final response = await _httpClient.put(
+      _uri(path),
+      headers: await _headers(auth: auth),
+      body: jsonEncode(body ?? {}),
+    );
+    return _decode(response);
+  }
+
+  Future<dynamic> delete(String path, {bool auth = true}) async {
+    final response = await _httpClient.delete(_uri(path), headers: await _headers(auth: auth));
+    return _decode(response);
+  }
+
+  Future<http.Response> download(String path, {Map<String, dynamic>? query}) async {
+    final response = await _httpClient.get(_uri(path, query), headers: await _headers());
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AppException('Download failed', statusCode: response.statusCode);
+    }
+    return response;
+  }
+
+  dynamic _decode(http.Response response) {
+    final body = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (body is Map<String, dynamic> && body.containsKey('data')) return body['data'];
+      return body;
+    }
+
+    if (body is Map<String, dynamic>) {
+      throw AppException(
+        body['message']?.toString() ?? 'Request failed',
+        statusCode: response.statusCode,
+        errors: body['errors'] is List ? body['errors'] as List<dynamic> : const [],
+      );
+    }
+    throw AppException('Request failed', statusCode: response.statusCode);
+  }
+}

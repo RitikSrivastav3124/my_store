@@ -1,0 +1,42 @@
+# General
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+.agents/
+
+# Flutter / Dart
+/App/.dart_tool/
+/App/build/
+/App/.flutter-plugins
+/App/.flutter-plugins-dependencies
+/App/.packages
+/App/.pub-cache/
+/App/.idea/
+/App/.vscode/
+/App/.fvm/
+/App/coverage/
+/App/*.iml
+/App/**/*.iml
+
+# Mobile secrets and local config
+/App/android/key.properties
+/App/android/app/google-services.json
+/App/android/app/src/debug/google-services.json
+/App/ios/Runner/GoogleService-Info.plist
+
+# Backend / Node.js
+/backend/node_modules/
+/backend/.env
+/backend/.env.*
+/backend/coverage/
+/backend/.nyc_output/
+/backend/logs/
+/backend/uploads/
+/backend/npm-debug.log*
+/backend/yarn-debug.log*
+/backend/pnpm-debug.log*
+
+# Any nested dependencies
+**/node_modules/
