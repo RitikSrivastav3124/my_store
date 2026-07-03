@@ -5,6 +5,7 @@
 .DS_Store
 Thumbs.db
 .agents/
+.vscode/
 
 # Flutter / Dart
 /App/.dart_tool/
