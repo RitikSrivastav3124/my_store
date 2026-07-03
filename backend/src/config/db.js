@@ -10,6 +10,7 @@ const connectDatabase = async () => {
   });
 
   logger.info(`MongoDB connected: ${mongoose.connection.host}`);
+  console.log(`MongoDB connected: ${mongoose.connection.host}`);
 };
 
 const disconnectDatabase = async () => {

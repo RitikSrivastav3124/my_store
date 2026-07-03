@@ -57,12 +57,12 @@ class AuthViewModel extends BaseViewModel {
   }
 
   Future<bool> changePassword(String currentPassword, String newPassword) async {
-    final result = await guard(
+    await guard<void>(
       () => _authRepository.changePassword(
         currentPassword: currentPassword,
         newPassword: newPassword,
       ),
     );
-    return result != null || error == null;
+    return error == null;
   }
 }

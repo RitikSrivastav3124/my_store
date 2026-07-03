@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../config/app_config.dart';
@@ -37,37 +38,50 @@ class ApiClient {
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     final cleanPath = path.startsWith('/') ? path : '/$path';
     final uri = Uri.parse('$_baseUrl$cleanPath');
-    final queryParams = query?.map((key, value) => MapEntry(key, '$value'))
-      ..removeWhere((_, value) => value.isEmpty || value == 'null');
-    return uri.replace(queryParameters: queryParams?.isEmpty ?? true ? null : queryParams);
+    final queryParams = query == null
+        ? null
+        : Map<String, String>.fromEntries(
+            query.entries
+                .map((entry) => MapEntry(entry.key, '${entry.value}'))
+                .where((entry) => entry.value.isNotEmpty && entry.value != 'null'),
+          );
+    return uri.replace(queryParameters: queryParams == null || queryParams.isEmpty ? null : queryParams);
   }
 
   Future<dynamic> get(String path, {Map<String, dynamic>? query, bool auth = true}) async {
-    final response = await _httpClient.get(_uri(path, query), headers: await _headers(auth: auth));
-    return _decode(response);
+    return _send(() async {
+      final response = await _httpClient.get(_uri(path, query), headers: await _headers(auth: auth));
+      return _decode(response);
+    }, method: 'GET', path: path);
   }
 
   Future<dynamic> post(String path, {Map<String, dynamic>? body, bool auth = true}) async {
-    final response = await _httpClient.post(
-      _uri(path),
-      headers: await _headers(auth: auth),
-      body: jsonEncode(body ?? {}),
-    );
-    return _decode(response);
+    return _send(() async {
+      final response = await _httpClient.post(
+        _uri(path),
+        headers: await _headers(auth: auth),
+        body: jsonEncode(body ?? {}),
+      );
+      return _decode(response);
+    }, method: 'POST', path: path, body: body);
   }
 
   Future<dynamic> put(String path, {Map<String, dynamic>? body, bool auth = true}) async {
-    final response = await _httpClient.put(
-      _uri(path),
-      headers: await _headers(auth: auth),
-      body: jsonEncode(body ?? {}),
-    );
-    return _decode(response);
+    return _send(() async {
+      final response = await _httpClient.put(
+        _uri(path),
+        headers: await _headers(auth: auth),
+        body: jsonEncode(body ?? {}),
+      );
+      return _decode(response);
+    }, method: 'PUT', path: path, body: body);
   }
 
   Future<dynamic> delete(String path, {bool auth = true}) async {
-    final response = await _httpClient.delete(_uri(path), headers: await _headers(auth: auth));
-    return _decode(response);
+    return _send(() async {
+      final response = await _httpClient.delete(_uri(path), headers: await _headers(auth: auth));
+      return _decode(response);
+    }, method: 'DELETE', path: path);
   }
 
   Future<http.Response> download(String path, {Map<String, dynamic>? query}) async {
@@ -93,5 +107,40 @@ class ApiClient {
       );
     }
     throw AppException('Request failed', statusCode: response.statusCode);
+  }
+
+  Future<T> _send<T>(
+    Future<T> Function() request, {
+    required String method,
+    required String path,
+    Map<String, dynamic>? body,
+  }) async {
+    try {
+      if (kDebugMode) {
+        debugPrint('API $method $_baseUrl$path');
+        if (body != null) debugPrint('API request body: ${jsonEncode(body)}');
+      }
+      return await request();
+    } on AppException {
+      rethrow;
+    } on http.ClientException catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('API client error: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      throw const AppException('Cannot connect to the server. Please verify the backend is running.');
+    } on FormatException catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('API response parse error: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      throw const AppException('Server returned an invalid response.');
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('API unexpected error: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      throw const AppException('Cannot reach the server. Check the API URL and network connection.');
+    }
   }
 }
