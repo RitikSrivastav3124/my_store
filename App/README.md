@@ -1,4 +1,4 @@
-# Khata Ledger
+# Khata Ledger App
 
 Khata Ledger is a modern Flutter-based mobile application designed for small business owners and their customers to manage credit-ledger relationships digitally. The app helps owners track customer balances, record transactions, and monitor outstanding dues, while giving customers a simple way to view their account history and stay informed.
 
