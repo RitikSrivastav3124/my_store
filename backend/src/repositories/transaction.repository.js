@@ -5,6 +5,11 @@ class TransactionRepository {
     return Transaction.create([data], options).then(([transaction]) => transaction);
   }
 
+  static findByRequestId(ownerId, requestId, options = {}) {
+    if (!requestId) return null;
+    return Transaction.findOne({ ownerId, requestId }, null, options);
+  }
+
   static async list(filter, pagination) {
     const [transactions, total] = await Promise.all([
       Transaction.find(filter)

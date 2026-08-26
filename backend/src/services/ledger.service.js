@@ -25,12 +25,24 @@ const runWithOptionalTransaction = async (work) => {
 };
 
 class LedgerService {
-  static async mutateDue(ownerId, customerId, payload, type) {
+  static async mutateDue(ownerId, customerId, payload, type, context = {}) {
     return runWithOptionalTransaction(async (session) => {
       const customer = await CustomerRepository.findOwnedById(ownerId, customerId, { session });
       if (!customer) throw new AppError('Customer not found', 404);
 
       const amount = Number(payload.amount);
+      const requestId = payload.requestId || context.requestId || null;
+      const existingTransaction = requestId
+        ? await TransactionRepository.findByRequestId(ownerId, requestId, { session })
+        : null;
+      if (existingTransaction) {
+        return {
+          customer,
+          transaction: existingTransaction,
+          idempotentReplay: true
+        };
+      }
+
       const isIncrease = type === TRANSACTION_TYPES.DUE_ADDED;
       const nextDue = isIncrease ? customer.currentDue + amount : customer.currentDue - amount;
 
@@ -52,7 +64,8 @@ class LedgerService {
           amount,
           description: payload.description || '',
           paymentMethod: payload.paymentMethod || 'cash',
-          balanceAfter: nextDue
+          balanceAfter: nextDue,
+          requestId
         },
         { session }
       );
@@ -70,7 +83,13 @@ class LedgerService {
             transactionId: transaction._id
           }
         },
-        { session }
+        {
+          session,
+          actorRole: 'owner',
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+          requestId: requestId || ''
+        }
       );
 
       const title = isIncrease ? 'Due amount updated' : 'Payment recorded';
@@ -99,16 +118,16 @@ class LedgerService {
     });
   }
 
-  static addDue(ownerId, customerId, payload) {
-    return this.mutateDue(ownerId, customerId, payload, TRANSACTION_TYPES.DUE_ADDED);
+  static addDue(ownerId, customerId, payload, context = {}) {
+    return this.mutateDue(ownerId, customerId, payload, TRANSACTION_TYPES.DUE_ADDED, context);
   }
 
-  static recordPayment(ownerId, customerId, payload) {
-    return this.mutateDue(ownerId, customerId, payload, TRANSACTION_TYPES.PAYMENT_RECEIVED);
+  static recordPayment(ownerId, customerId, payload, context = {}) {
+    return this.mutateDue(ownerId, customerId, payload, TRANSACTION_TYPES.PAYMENT_RECEIVED, context);
   }
 
-  static reduceDue(ownerId, customerId, payload) {
-    return this.mutateDue(ownerId, customerId, payload, TRANSACTION_TYPES.DUE_REDUCED);
+  static reduceDue(ownerId, customerId, payload, context = {}) {
+    return this.mutateDue(ownerId, customerId, payload, TRANSACTION_TYPES.DUE_REDUCED, context);
   }
 }
 

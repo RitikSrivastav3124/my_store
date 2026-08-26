@@ -19,8 +19,11 @@ class SettingsScreen extends StatelessWidget {
         children: [
           Card(
             child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.person)),
-              title: Text(user?.name ?? ''),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              leading: CircleAvatar(
+                child: Text((user?.name.isNotEmpty ?? false) ? user!.name[0].toUpperCase() : '?'),
+              ),
+              title: Text(user?.name ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
               subtitle: Text('${user?.phone ?? ''}${user?.email == null ? '' : '\n${user?.email}'}'),
               isThreeLine: user?.email != null,
             ),

@@ -1,13 +1,38 @@
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+
 import '../../domain/entities/dashboard_summary.dart';
 import '../../domain/entities/ledger_transaction.dart';
 import '../../domain/entities/store_customer.dart';
 import '../../domain/repositories/ledger_repository.dart';
 import '../datasources/remote/ledger_remote_datasource.dart';
 
+const _modelMappingIsolateThreshold = 20;
+
+List<StoreCustomer> _storeCustomersFromRows(List<dynamic> rows) {
+  return rows
+      .map((item) => StoreCustomer.fromJson(Map<String, dynamic>.from(item as Map)))
+      .toList();
+}
+
+List<LedgerTransaction> _ledgerTransactionsFromRows(List<dynamic> rows) {
+  return rows
+      .map((item) => LedgerTransaction.fromJson(Map<String, dynamic>.from(item as Map)))
+      .toList();
+}
+
+List<Map<String, dynamic>> _mapsFromRows(List<dynamic> rows) {
+  return rows.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+}
+
 class LedgerRepositoryImpl implements LedgerRepository {
   LedgerRepositoryImpl(this._remoteDataSource);
 
   final LedgerRemoteDataSource _remoteDataSource;
+  final _random = Random.secure();
+
+  String _requestId() => '${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}';
 
   @override
   Future<DashboardSummary> fetchDashboard() async {
@@ -17,7 +42,9 @@ class LedgerRepositoryImpl implements LedgerRepository {
   @override
   Future<List<StoreCustomer>> fetchCustomers({String? search, String? status, int page = 1}) async {
     final rows = await _remoteDataSource.customers(search: search, status: status, page: page);
-    return rows.map((item) => StoreCustomer.fromJson(item as Map<String, dynamic>)).toList();
+    return rows.length >= _modelMappingIsolateThreshold
+        ? compute(_storeCustomersFromRows, rows)
+        : _storeCustomersFromRows(rows);
   }
 
   @override
@@ -46,7 +73,9 @@ class LedgerRepositoryImpl implements LedgerRepository {
   @override
   Future<List<LedgerTransaction>> fetchCustomerHistory(String id) async {
     final rows = await _remoteDataSource.ownerHistory(id);
-    return rows.map((item) => LedgerTransaction.fromJson(item as Map<String, dynamic>)).toList();
+    return rows.length >= _modelMappingIsolateThreshold
+        ? compute(_ledgerTransactionsFromRows, rows)
+        : _ledgerTransactionsFromRows(rows);
   }
 
   @override
@@ -57,7 +86,9 @@ class LedgerRepositoryImpl implements LedgerRepository {
   @override
   Future<List<LedgerTransaction>> fetchMyHistory() async {
     final rows = await _remoteDataSource.myHistory();
-    return rows.map((item) => LedgerTransaction.fromJson(item as Map<String, dynamic>)).toList();
+    return rows.length >= _modelMappingIsolateThreshold
+        ? compute(_ledgerTransactionsFromRows, rows)
+        : _ledgerTransactionsFromRows(rows);
   }
 
   @override
@@ -66,6 +97,7 @@ class LedgerRepositoryImpl implements LedgerRepository {
       'amount': amount,
       'description': description,
       'paymentMethod': 'other',
+      'requestId': _requestId(),
     });
   }
 
@@ -80,6 +112,7 @@ class LedgerRepositoryImpl implements LedgerRepository {
       'amount': amount,
       'description': description,
       'paymentMethod': paymentMethod,
+      'requestId': _requestId(),
     });
   }
 
@@ -89,18 +122,23 @@ class LedgerRepositoryImpl implements LedgerRepository {
       'amount': amount,
       'description': description,
       'paymentMethod': 'other',
+      'requestId': _requestId(),
     });
   }
 
   @override
   Future<List<StoreCustomer>> fetchOutstanding() async {
     final rows = await _remoteDataSource.outstanding();
-    return rows.map((item) => StoreCustomer.fromJson(item as Map<String, dynamic>)).toList();
+    return rows.length >= _modelMappingIsolateThreshold
+        ? compute(_storeCustomersFromRows, rows)
+        : _storeCustomersFromRows(rows);
   }
 
   @override
   Future<List<Map<String, dynamic>>> fetchMonthlyReport() async {
     final rows = await _remoteDataSource.monthlyReport();
-    return rows.map((item) => item as Map<String, dynamic>).toList();
+    return rows.length >= _modelMappingIsolateThreshold
+        ? compute(_mapsFromRows, rows)
+        : _mapsFromRows(rows);
   }
 }

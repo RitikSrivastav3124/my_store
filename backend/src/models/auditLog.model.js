@@ -14,10 +14,30 @@ const auditLogSchema = new mongoose.Schema(
       required: true,
       index: true
     },
+    performedByRole: {
+      type: String,
+      trim: true,
+      index: true
+    },
     targetCustomer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Customer',
       index: true
+    },
+    ipAddress: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    userAgent: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    requestId: {
+      type: String,
+      trim: true,
+      default: ''
     },
     oldValue: {
       type: mongoose.Schema.Types.Mixed,
@@ -40,5 +60,9 @@ const auditLogSchema = new mongoose.Schema(
 
 auditLogSchema.index({ performedBy: 1, timestamp: -1 });
 auditLogSchema.index({ targetCustomer: 1, timestamp: -1 });
+
+auditLogSchema.pre(['updateOne', 'findOneAndUpdate', 'deleteOne', 'deleteMany'], function blockAuditMutation(next) {
+  next(new Error('Audit logs are immutable'));
+});
 
 module.exports = mongoose.model('AuditLog', auditLogSchema);

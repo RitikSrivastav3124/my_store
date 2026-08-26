@@ -8,6 +8,7 @@ class StoreCustomer {
     required this.currentDue,
     this.ownerId,
     this.notes,
+    this.updatedAt,
   });
 
   final String id;
@@ -16,6 +17,7 @@ class StoreCustomer {
   final double creditLimit;
   final double currentDue;
   final String? notes;
+  final DateTime? updatedAt;
 
   factory StoreCustomer.fromJson(Map<String, dynamic> json) {
     final userJson = json['userId'] is Map<String, dynamic>
@@ -35,6 +37,7 @@ class StoreCustomer {
       creditLimit: (json['creditLimit'] as num?)?.toDouble() ?? 0,
       currentDue: (json['currentDue'] as num?)?.toDouble() ?? 0,
       notes: json['notes']?.toString(),
+      updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
     );
   }
 }

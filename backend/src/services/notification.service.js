@@ -15,7 +15,7 @@ class NotificationService {
 
     if (messaging && tokens.length) {
       try {
-        await messaging.sendEachForMulticast({
+        const response = await messaging.sendEachForMulticast({
           tokens,
           notification: {
             title,
@@ -23,6 +23,17 @@ class NotificationService {
           },
           data: Object.fromEntries(Object.entries(data).map(([key, value]) => [key, String(value)]))
         });
+        const invalidTokens = [];
+        response.responses.forEach((item, index) => {
+          const code = item.error?.code || '';
+          if (
+            code.includes('registration-token-not-registered') ||
+            code.includes('invalid-registration-token')
+          ) {
+            invalidTokens.push(tokens[index]);
+          }
+        });
+        if (invalidTokens.length) await UserRepository.removeFcmTokens(userId, invalidTokens);
       } catch (error) {
         logger.warn('Failed to deliver push notification', {
           userId: userId.toString(),

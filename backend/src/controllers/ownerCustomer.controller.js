@@ -3,13 +3,19 @@ const LedgerService = require('../services/ledger.service');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendSuccess } = require('../helpers/response.helper');
 
+const requestContext = (req) => ({
+  userAgent: req.get('user-agent'),
+  ipAddress: req.ip,
+  requestId: req.get('Idempotency-Key') || req.body.requestId || ''
+});
+
 exports.list = asyncHandler(async (req, res) => {
   const result = await CustomerService.list(req.user._id, req.query);
   sendSuccess(res, 200, 'Customers fetched successfully', result.customers, result.meta);
 });
 
 exports.create = asyncHandler(async (req, res) => {
-  const customer = await CustomerService.create(req.user._id, req.body);
+  const customer = await CustomerService.create(req.user._id, req.body, requestContext(req));
   sendSuccess(res, 201, 'Customer created successfully', customer);
 });
 
@@ -19,32 +25,32 @@ exports.get = asyncHandler(async (req, res) => {
 });
 
 exports.update = asyncHandler(async (req, res) => {
-  const customer = await CustomerService.update(req.user._id, req.params.id, req.body);
+  const customer = await CustomerService.update(req.user._id, req.params.id, req.body, requestContext(req));
   sendSuccess(res, 200, 'Customer updated successfully', customer);
 });
 
 exports.remove = asyncHandler(async (req, res) => {
-  await CustomerService.softDelete(req.user._id, req.params.id);
+  await CustomerService.softDelete(req.user._id, req.params.id, requestContext(req));
   sendSuccess(res, 200, 'Customer deleted successfully');
 });
 
 exports.suspend = asyncHandler(async (req, res) => {
-  const customer = await CustomerService.suspend(req.user._id, req.params.id);
+  const customer = await CustomerService.suspend(req.user._id, req.params.id, requestContext(req));
   sendSuccess(res, 200, 'Customer status updated successfully', customer);
 });
 
 exports.addDue = asyncHandler(async (req, res) => {
-  const result = await LedgerService.addDue(req.user._id, req.params.id, req.body);
+  const result = await LedgerService.addDue(req.user._id, req.params.id, req.body, requestContext(req));
   sendSuccess(res, 201, 'Due amount added successfully', result);
 });
 
 exports.payment = asyncHandler(async (req, res) => {
-  const result = await LedgerService.recordPayment(req.user._id, req.params.id, req.body);
+  const result = await LedgerService.recordPayment(req.user._id, req.params.id, req.body, requestContext(req));
   sendSuccess(res, 201, 'Payment recorded successfully', result);
 });
 
 exports.reduceDue = asyncHandler(async (req, res) => {
-  const result = await LedgerService.reduceDue(req.user._id, req.params.id, req.body);
+  const result = await LedgerService.reduceDue(req.user._id, req.params.id, req.body, requestContext(req));
   sendSuccess(res, 201, 'Due amount reduced successfully', result);
 });
 

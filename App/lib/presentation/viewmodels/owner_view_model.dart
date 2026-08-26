@@ -20,8 +20,12 @@ class OwnerViewModel extends BaseViewModel {
 
   Future<void> refreshDashboard() async {
     await guard(() async {
-      dashboard = await _ledgerRepository.fetchDashboard();
-      monthlyReport = await _ledgerRepository.fetchMonthlyReport();
+      final results = await Future.wait<dynamic>([
+        _ledgerRepository.fetchDashboard(),
+        _ledgerRepository.fetchMonthlyReport(),
+      ]);
+      dashboard = results[0] as DashboardSummary;
+      monthlyReport = results[1] as List<Map<String, dynamic>>;
     });
   }
 
@@ -47,35 +51,45 @@ class OwnerViewModel extends BaseViewModel {
 
   Future<void> openCustomer(String id) async {
     await guard(() async {
-      selectedCustomer = await _ledgerRepository.fetchCustomer(id);
-      selectedHistory = await _ledgerRepository.fetchCustomerHistory(id);
+      final results = await Future.wait<dynamic>([
+        _ledgerRepository.fetchCustomer(id),
+        _ledgerRepository.fetchCustomerHistory(id),
+      ]);
+      selectedCustomer = results[0] as StoreCustomer;
+      selectedHistory = results[1] as List<LedgerTransaction>;
     });
   }
 
   Future<bool> addDue(String id, double amount, String description) async {
     final result = await guard(() => _ledgerRepository.addDue(id, amount, description));
     if (result == null) return false;
-    await openCustomer(id);
-    await loadCustomers();
-    await refreshDashboard();
+    await Future.wait([
+      openCustomer(id),
+      loadCustomers(),
+      refreshDashboard(),
+    ]);
     return true;
   }
 
   Future<bool> recordPayment(String id, double amount, String description, String paymentMethod) async {
     final result = await guard(() => _ledgerRepository.recordPayment(id, amount, description, paymentMethod));
     if (result == null) return false;
-    await openCustomer(id);
-    await loadCustomers();
-    await refreshDashboard();
+    await Future.wait([
+      openCustomer(id),
+      loadCustomers(),
+      refreshDashboard(),
+    ]);
     return true;
   }
 
   Future<bool> reduceDue(String id, double amount, String description) async {
     final result = await guard(() => _ledgerRepository.reduceDue(id, amount, description));
     if (result == null) return false;
-    await openCustomer(id);
-    await loadCustomers();
-    await refreshDashboard();
+    await Future.wait([
+      openCustomer(id),
+      loadCustomers(),
+      refreshDashboard(),
+    ]);
     return true;
   }
 

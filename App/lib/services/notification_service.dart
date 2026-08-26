@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -7,17 +9,31 @@ class NotificationService {
   NotificationService(this._authRepository);
 
   final AuthRepository _authRepository;
+  StreamSubscription<String>? _tokenRefreshSubscription;
+  bool _initialized = false;
 
   Future<void> initialize() async {
+    if (_initialized) return;
+    _initialized = true;
+
     try {
       await Firebase.initializeApp();
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
       final token = await messaging.getToken();
       if (token != null) await _authRepository.registerFcmToken(token);
-      FirebaseMessaging.instance.onTokenRefresh.listen(_authRepository.registerFcmToken);
+      _tokenRefreshSubscription ??= FirebaseMessaging.instance.onTokenRefresh.listen(
+        _authRepository.registerFcmToken,
+      );
     } catch (_) {
+      _initialized = false;
       return;
     }
+  }
+
+  Future<void> dispose() async {
+    await _tokenRefreshSubscription?.cancel();
+    _tokenRefreshSubscription = null;
+    _initialized = false;
   }
 }

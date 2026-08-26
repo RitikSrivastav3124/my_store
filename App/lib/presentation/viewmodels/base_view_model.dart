@@ -15,9 +15,10 @@ class BaseViewModel extends ChangeNotifier {
   }
 
   Future<T?> guard<T>(Future<T> Function() action) async {
+    final shouldNotifyStart = !_loading || _error != null;
     _loading = true;
     _error = null;
-    notifyListeners();
+    if (shouldNotifyStart) notifyListeners();
     try {
       return await action();
     } on AppException catch (error) {

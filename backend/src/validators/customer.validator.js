@@ -15,7 +15,8 @@ const createCustomerRules = [
   body('password')
     .isString()
     .isLength({ min: 8, max: 72 })
-    .withMessage('Password must be 8 to 72 characters long'),
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/)
+    .withMessage('Password must be 8 to 72 characters and include uppercase, lowercase, number, and special character'),
   body('creditLimit').optional().isFloat({ min: 0 }).withMessage('Credit limit must be zero or greater'),
   body('openingDue').optional().isFloat({ min: 0 }).withMessage('Opening due must be zero or greater'),
   body('notes').optional({ nullable: true }).isString().trim().isLength({ max: 1000 })

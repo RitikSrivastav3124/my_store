@@ -12,18 +12,25 @@ const swaggerSpec = require('./config/swagger');
 const routes = require('./routes');
 const { apiRateLimiter } = require('./middleware/rateLimiter.middleware');
 const { errorHandler, notFoundHandler } = require('./middleware/error.middleware');
+const AppError = require('./utils/appError');
 const logger = require('./utils/logger');
 
 const app = express();
 
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    referrerPolicy: { policy: 'no-referrer' }
+  })
+);
 app.use(
   cors({
     origin(origin, callback) {
       if (!origin || env.corsOrigin.includes(origin)) return callback(null, true);
-      return callback(new Error('Not allowed by CORS'));
+      return callback(new AppError('Origin is not allowed by CORS', 403));
     },
     credentials: true
   })

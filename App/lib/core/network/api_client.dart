@@ -8,6 +8,12 @@ import '../errors/app_exception.dart';
 
 typedef TokenReader = Future<String?> Function();
 
+const _jsonDecodeIsolateThreshold = 50 * 1024;
+
+dynamic _decodeResponseBody(String body) {
+  return body.isEmpty ? <String, dynamic>{} : jsonDecode(body);
+}
+
 class ApiClient {
   ApiClient({
     http.Client? httpClient,
@@ -20,6 +26,14 @@ class ApiClient {
   final http.Client _httpClient;
   final TokenReader? _tokenReader;
   final String _baseUrl;
+
+  Map<String, dynamic> _redactBody(Map<String, dynamic> body) {
+    const sensitiveKeys = {'password', 'currentPassword', 'newPassword', 'refreshToken', 'accessToken', 'fcmToken'};
+    return body.map((key, value) {
+      if (sensitiveKeys.contains(key)) return MapEntry(key, '***');
+      return MapEntry(key, value);
+    });
+  }
 
   Future<Map<String, String>> _headers({bool auth = true}) async {
     final headers = <String, String>{
@@ -92,8 +106,12 @@ class ApiClient {
     return response;
   }
 
-  dynamic _decode(http.Response response) {
-    final body = response.body.isEmpty ? <String, dynamic>{} : jsonDecode(response.body);
+  Future<dynamic> _decode(http.Response response) async {
+    final body = response.body.isEmpty
+        ? <String, dynamic>{}
+        : response.body.length >= _jsonDecodeIsolateThreshold
+            ? await compute(_decodeResponseBody, response.body)
+            : _decodeResponseBody(response.body);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (body is Map<String, dynamic> && body.containsKey('data')) return body['data'];
       return body;
@@ -118,7 +136,7 @@ class ApiClient {
     try {
       if (kDebugMode) {
         debugPrint('API $method $_baseUrl$path');
-        if (body != null) debugPrint('API request body: ${jsonEncode(body)}');
+        if (body != null) debugPrint('API request body: ${jsonEncode(_redactBody(body))}');
       }
       return await request();
     } on AppException {

@@ -29,7 +29,7 @@ const runWithOptionalTransaction = async (work) => {
 };
 
 class CustomerService {
-  static async create(ownerId, payload) {
+  static async create(ownerId, payload, context = {}) {
     const duplicate = await UserRepository.findDuplicate({
       email: payload.email,
       phone: payload.phone
@@ -47,7 +47,13 @@ class CustomerService {
           role: ROLES.CUSTOMER,
           status: USER_STATUS.ACTIVE
         },
-        { session }
+        {
+          session,
+          actorRole: 'owner',
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+          requestId: context.requestId || ''
+        }
       );
 
       const customer = await CustomerRepository.create(
@@ -118,7 +124,7 @@ class CustomerService {
     return customer;
   }
 
-  static async update(ownerId, customerId, payload) {
+  static async update(ownerId, customerId, payload, context = {}) {
     const existing = await this.getOwned(ownerId, customerId);
 
     const duplicate = await UserRepository.findDuplicate(
@@ -158,14 +164,20 @@ class CustomerService {
           oldValue: existing,
           newValue: updated
         },
-        { session }
+        {
+          session,
+          actorRole: 'owner',
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+          requestId: context.requestId || ''
+        }
       );
 
       return CustomerRepository.findOwnedById(ownerId, customerId, { session });
     });
   }
 
-  static async softDelete(ownerId, customerId) {
+  static async softDelete(ownerId, customerId, context = {}) {
     const existing = await this.getOwned(ownerId, customerId);
 
     await UserRepository.updateById(existing.userId._id, {
@@ -180,10 +192,15 @@ class CustomerService {
       newValue: {
         status: USER_STATUS.DELETED
       }
+    }, {
+      actorRole: 'owner',
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+      requestId: context.requestId || ''
     });
   }
 
-  static async suspend(ownerId, customerId) {
+  static async suspend(ownerId, customerId, context = {}) {
     const existing = await this.getOwned(ownerId, customerId);
     const nextStatus =
       existing.userId.status === USER_STATUS.SUSPENDED ? USER_STATUS.ACTIVE : USER_STATUS.SUSPENDED;
@@ -202,6 +219,11 @@ class CustomerService {
       newValue: {
         status: updatedUser.status
       }
+    }, {
+      actorRole: 'owner',
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+      requestId: context.requestId || ''
     });
 
     return this.getOwned(ownerId, customerId);

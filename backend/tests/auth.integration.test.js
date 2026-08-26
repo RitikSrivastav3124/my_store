@@ -7,7 +7,7 @@ describe('Auth API', () => {
       name: 'Store Owner',
       phone: '+919999999999',
       email: 'owner@example.com',
-      password: 'StrongPass123'
+      password: 'StrongPass123!'
     });
 
     expect(response.status).toBe(201);
@@ -23,12 +23,12 @@ describe('Auth API', () => {
       name: 'Store Owner',
       phone: '+919999999999',
       email: 'owner@example.com',
-      password: 'StrongPass123'
+      password: 'StrongPass123!'
     });
 
     const response = await request(app).post('/api/auth/login').send({
       identifier: 'owner@example.com',
-      password: 'StrongPass123'
+      password: 'StrongPass123!'
     });
 
     expect(response.status).toBe(200);

@@ -1,18 +1,24 @@
 const PDFDocument = require('pdfkit');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const { Parser } = require('@json2csv/plainjs');
 const env = require('../config/env');
 const ReportService = require('./report.service');
 
+const escapeCsvValue = (value) => {
+  if (value === null || value === undefined) return '';
+  const text = String(value);
+  return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+};
+
 const flattenOutstanding = (customers) =>
   customers.map((customer) => ({
-    Name: customer.name,
-    Phone: customer.phone,
-    Email: customer.email || '',
-    Status: customer.status,
+    Name: escapeCsvValue(customer.name),
+    Phone: escapeCsvValue(customer.phone),
+    Email: escapeCsvValue(customer.email || ''),
+    Status: escapeCsvValue(customer.status),
     'Current Due': customer.currentDue,
     'Credit Limit': customer.creditLimit,
-    'Updated At': customer.updatedAt
+    'Updated At': escapeCsvValue(customer.updatedAt)
   }));
 
 const pdfToBuffer = (doc) =>
@@ -33,10 +39,23 @@ class ExportService {
 
   static async outstandingExcel(ownerId, query) {
     const report = await ReportService.outstanding(ownerId, { ...query, page: 1, limit: 10000 });
-    const worksheet = XLSX.utils.json_to_sheet(flattenOutstanding(report.customers));
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Outstanding');
-    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = env.reportBrandName;
+    workbook.created = new Date();
+    const worksheet = workbook.addWorksheet('Outstanding');
+    const rows = flattenOutstanding(report.customers);
+    worksheet.columns = Object.keys(rows[0] || {
+      Name: '',
+      Phone: '',
+      Email: '',
+      Status: '',
+      'Current Due': '',
+      'Credit Limit': '',
+      'Updated At': ''
+    }).map((key) => ({ header: key, key, width: 20 }));
+    rows.forEach((row) => worksheet.addRow(row));
+    worksheet.getRow(1).font = { bold: true };
+    return workbook.xlsx.writeBuffer();
   }
 
   static async outstandingPdf(ownerId, query) {

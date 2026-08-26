@@ -21,9 +21,15 @@ class _CustomerShellScreenState extends State<CustomerShellScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CustomerViewModel>().refresh();
-      context.read<NotificationViewModel>().refresh();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final customerViewModel = context.read<CustomerViewModel>();
+      final notificationViewModel = context.read<NotificationViewModel>();
+
+      await Future.wait([
+        customerViewModel.refresh(),
+        notificationViewModel.refresh(),
+      ]);
     });
   }
 

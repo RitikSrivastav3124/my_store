@@ -13,8 +13,12 @@ class CustomerViewModel extends BaseViewModel {
 
   Future<void> refresh() async {
     await guard(() async {
-      profile = await _ledgerRepository.fetchMyProfile();
-      history = await _ledgerRepository.fetchMyHistory();
+      final results = await Future.wait<dynamic>([
+        _ledgerRepository.fetchMyProfile(),
+        _ledgerRepository.fetchMyHistory(),
+      ]);
+      profile = results[0] as StoreCustomer;
+      history = results[1] as List<LedgerTransaction>;
     });
   }
 }

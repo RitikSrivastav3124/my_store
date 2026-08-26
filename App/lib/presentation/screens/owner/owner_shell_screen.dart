@@ -22,10 +22,19 @@ class _OwnerShellScreenState extends State<OwnerShellScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<OwnerViewModel>().refreshDashboard();
-      context.read<OwnerViewModel>().loadCustomers();
-      context.read<NotificationViewModel>().refresh();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final ownerViewModel = context.read<OwnerViewModel>();
+      final notificationViewModel = context.read<NotificationViewModel>();
+
+      await Future.wait([
+        () async {
+          await ownerViewModel.refreshDashboard();
+          if (!mounted) return;
+          await ownerViewModel.loadCustomers();
+        }(),
+        notificationViewModel.refresh(),
+      ]);
     });
   }
 

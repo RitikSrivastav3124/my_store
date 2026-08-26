@@ -11,7 +11,9 @@ class TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isPayment = transaction.type == 'payment_received' || transaction.type == 'due_reduced';
+    final isPayment =
+        transaction.type == 'payment_received' ||
+        transaction.type == 'due_reduced';
     final color = isPayment ? Colors.green.shade600 : Colors.red.shade600;
     final icon = isPayment ? Icons.south_west : Icons.north_east;
     final title = switch (transaction.type) {
@@ -21,25 +23,64 @@ class TransactionTile extends StatelessWidget {
     };
 
     return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.12),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(title),
-        subtitle: Text(
-          '${DateFormat.yMMMd().add_jm().format(transaction.createdAt)}'
-          '${transaction.description?.isNotEmpty == true ? ' • ${transaction.description}' : ''}',
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
           children: [
-            Text(
-              CurrencyFormatter.format(transaction.amount),
-              style: TextStyle(color: color, fontWeight: FontWeight.w700),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color, size: 22),
             ),
-            Text('Bal ${CurrencyFormatter.format(transaction.balanceAfter)}'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    transaction.description?.isNotEmpty == true
+                        ? transaction.description!
+                        : DateFormat.jm().format(transaction.createdAt),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Balance ${CurrencyFormatter.format(transaction.balanceAfter)}',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                CurrencyFormatter.format(transaction.amount),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w900,
+                ),
+                textAlign: TextAlign.end,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
       ),

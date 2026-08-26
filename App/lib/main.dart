@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import 'config/app_config.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/customer/customer_shell_screen.dart';
@@ -30,13 +29,23 @@ class KhataLedgerApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeViewModel()),
         ChangeNotifierProvider(
-          create: (_) => AuthViewModel(dependencies.authRepository, dependencies.storage)..bootstrap(),
+          create: (_) =>
+              AuthViewModel(dependencies.authRepository, dependencies.storage)
+                ..bootstrap(),
         ),
         ChangeNotifierProvider(
-          create: (_) => OwnerViewModel(dependencies.ledgerRepository, dependencies.exportService),
+          create: (_) => OwnerViewModel(
+            dependencies.ledgerRepository,
+            dependencies.exportService,
+          ),
         ),
-        ChangeNotifierProvider(create: (_) => CustomerViewModel(dependencies.ledgerRepository)),
-        ChangeNotifierProvider(create: (_) => NotificationViewModel(dependencies.notificationRepository)),
+        ChangeNotifierProvider(
+          create: (_) => CustomerViewModel(dependencies.ledgerRepository),
+        ),
+        ChangeNotifierProvider(
+          create: (_) =>
+              NotificationViewModel(dependencies.notificationRepository),
+        ),
       ],
       child: Consumer<ThemeViewModel>(
         builder: (context, theme, _) => MaterialApp(

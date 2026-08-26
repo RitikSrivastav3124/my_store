@@ -51,7 +51,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(Icons.account_balance_wallet, size: 60, color: colorScheme.primary),
+                    Center(
+                      child: Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: Icon(Icons.account_balance_wallet, size: 38, color: colorScheme.primary),
+                      ),
+                    ),
                     const SizedBox(height: 18),
                     Text(
                       AppConfig.appName,
@@ -60,9 +70,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Secure store ledger for owners and customers',
+                      'Simple daily ledger for shops and customers',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 32),
                     AppTextField(

@@ -6,12 +6,16 @@ class AuditService {
       {
         action,
         performedBy,
+        performedByRole: options.actorRole || '',
         targetCustomer,
+        ipAddress: options.ipAddress || '',
+        userAgent: options.userAgent || '',
+        requestId: options.requestId || '',
         oldValue,
         newValue,
         timestamp: new Date()
       },
-      options
+      { session: options.session }
     );
   }
 }

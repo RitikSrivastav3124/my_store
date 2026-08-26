@@ -6,13 +6,26 @@ import '../../domain/entities/app_user.dart';
 
 class SecureStorageService {
   SecureStorageService({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              aOptions: AndroidOptions(encryptedSharedPreferences: true),
+              iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
+            );
 
   final FlutterSecureStorage _storage;
 
   static const _accessTokenKey = 'access_token';
   static const _refreshTokenKey = 'refresh_token';
   static const _userKey = 'current_user';
+
+  Future<String?> _safeRead(String key) async {
+    try {
+      return await _storage.read(key: key);
+    } catch (_) {
+      await clearSession();
+      return null;
+    }
+  }
 
   Future<void> saveSession({
     required String accessToken,
@@ -24,19 +37,28 @@ class SecureStorageService {
     await _storage.write(key: _userKey, value: jsonEncode(user.toJson()));
   }
 
-  Future<String?> readAccessToken() => _storage.read(key: _accessTokenKey);
+  Future<String?> readAccessToken() => _safeRead(_accessTokenKey);
 
-  Future<String?> readRefreshToken() => _storage.read(key: _refreshTokenKey);
+  Future<String?> readRefreshToken() => _safeRead(_refreshTokenKey);
 
   Future<AppUser?> readUser() async {
-    final raw = await _storage.read(key: _userKey);
-    if (raw == null) return null;
-    return AppUser.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    try {
+      final raw = await _safeRead(_userKey);
+      if (raw == null) return null;
+      return AppUser.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    } catch (_) {
+      await clearSession();
+      return null;
+    }
   }
 
   Future<void> clearSession() async {
-    await _storage.delete(key: _accessTokenKey);
-    await _storage.delete(key: _refreshTokenKey);
-    await _storage.delete(key: _userKey);
+    for (final key in [_accessTokenKey, _refreshTokenKey, _userKey]) {
+      try {
+        await _storage.delete(key: key);
+      } catch (_) {
+        continue;
+      }
+    }
   }
 }

@@ -48,7 +48,23 @@ const userSchema = new mongoose.Schema(
         type: String,
         trim: true
       }
-    ]
+    ],
+    loginAttempts: {
+      type: Number,
+      default: 0,
+      min: 0,
+      select: false
+    },
+    lockUntil: {
+      type: Date,
+      default: null,
+      select: false
+    },
+    passwordChangedAt: {
+      type: Date,
+      default: null,
+      select: false
+    }
   },
   {
     timestamps: true
@@ -56,6 +72,7 @@ const userSchema = new mongoose.Schema(
 );
 
 userSchema.index({ role: 1, status: 1 });
+userSchema.index({ lockUntil: 1 });
 
 userSchema.methods.toJSON = function toJSON() {
   const user = this.toObject();

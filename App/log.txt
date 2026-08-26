@@ -1,0 +1,202 @@
+Performance investigation report - Flutter app freeze (main-isolate work & rebuilds)
+
+Instructions: this file lists only confirmed runtime causes of unnecessary rebuilds, repeated API calls, or main-isolate work. Each entry contains: File, Line, Why it rebuilds / triggers work, Confidence.
+
+1) File: App/lib/presentation/viewmodels/base_view_model.dart
+   Lines: 14, 20, 31
+   Why: `guard()` sets `_loading = true` and calls `notifyListeners()` before the awaited action, and calls `notifyListeners()` again in `finally` after the action completes. Any widget listening to a ViewModel using `BaseViewModel` (e.g., `OwnerViewModel`, `NotificationViewModel`, `CustomerViewModel`) will receive two notifications per network call (start + end), causing UI rebuilds of consumers/selectors that depend on those ViewModels. This doubles rebuilds for each request and causes extra main-isolate work for large lists/charts.
+   Confidence: High
+
+2) File: App/lib/presentation/viewmodels/auth_view_model.dart
+   Lines: 21 (bootstrap start), 30, 39, 55, 63 (notifyListeners calls)
+   Why: `bootstrap()` is invoked during provider creation in `main.dart` (see entry below) and does `notifyListeners()` in `finally`. That `notifyListeners()` forces `RoleGate` (which uses `context.watch<AuthViewModel>()`) to rebuild and may mount the appropriate shell screen (owner/customer). Mounting those screens runs their `initState` callbacks which perform network calls (see owner/customer shells). Other `notifyListeners()` calls on login/register/logout will also rebuild listeners. These are real triggers for subtree rebuilds and for the initial sequence of API calls that follow mount.
+   Confidence: High
+
+3) File: App/lib/main.dart
+   Lines: 28-46 (MultiProvider + AuthViewModel creation)
+   Why: All `ChangeNotifierProvider` instances are created at app root here. `AuthViewModel` is created with a cascade-call to `..bootstrap()`. The bootstrap async call (and its `notifyListeners`) runs during provider initialization and leads to `RoleGate` rebuild and the subsequent mounting of shell screens which perform network requests (`refreshDashboard`, `loadCustomers`, `refresh`). Providers are not created elsewhere in the app, so provider re-creation is not the cause of repeated calls.
+   Confidence: High
+
+4) File: App/lib/presentation/screens/owner/owner_shell_screen.dart
+   Lines: 22-34 (initState -> addPostFrameCallback)
+   Why: In `initState` an `addPostFrameCallback` calls `ownerViewModel.refreshDashboard()` and `ownerViewModel.loadCustomers()` (then `notificationViewModel.refresh()`). Those are legitimate startup network calls. If the `OwnerShellScreen` is mounted more than once (for example due to the top-level auth switching or the widget being recreated) these startup calls will run again. They are a confirmed source of multiple network requests when the shell is remounted.
+   Confidence: High
+
+5) File: App/lib/presentation/screens/customer/customer_shell_screen.dart
+   Lines: 21-31 (initState -> addPostFrameCallback)
+   Why: On the customer side the shell's `addPostFrameCallback` calls `customerViewModel.refresh()` and `notificationViewModel.refresh()`. Same as owner shell: a confirmed startup network call that runs each time the shell is mounted.
+   Confidence: High
+
+6) File: App/lib/presentation/screens/owner/customer_detail_screen.dart
+   Lines: 22-26 (initState -> addPostFrameCallback)
+   Why: `addPostFrameCallback` invokes `context.read<OwnerViewModel>().openCustomer(widget.customerId)`. This triggers a network fetch of the customer and its history on mount. If the detail screen is recreated frequently, this will result in repeated network calls.
+   Confidence: High
+
+7) File: App/lib/presentation/screens/owner/reports_screen.dart
+   Lines: 19-22 (initState -> addPostFrameCallback)
+   Why: `loadOutstanding()` is called from `addPostFrameCallback` on mount. This is a confirmed one-shot network call per mount; repeated mounts lead to repeated calls.
+   Confidence: High
+
+8) File: App/lib/presentation/screens/owner/customers_screen.dart
+   Lines: 47 (Selector), 52-92 (ListView.builder and search handlers)
+   Why: UI uses `Selector<OwnerViewModel, _CustomersData>` where the selected value includes `loading` (computed as `vm.loading && vm.customers.isEmpty`). Because `BaseViewModel.guard()` toggles `loading` and calls `notifyListeners()` at start and end, the `Selector` will rebuild the entire `ListView` twice per network request (start + finish). Rebuilding a large `ListView.builder` is expensive and can contribute to main-isolate freezes.
+   Confidence: High
+
+9) File: App/lib/presentation/screens/notifications/notifications_screen.dart
+   Lines: 16 (title Selector for `unreadCount`), 30 (body Selector -> ListView.builder)
+   Why: The `Selector` used for the body selects `_NotificationsData` (notifications list + loading + error) and uses `identical` on the notifications list. Similar to customers, `guard()` toggles `loading` and causes notifications consumers to be notified twice per refresh. The `ListView` and its list tile builders are rebuilt at least for the two notifications, leading to repeated rebuild work. The title uses a tight `Selector` (unreadCount) which is fine — small rebuild.
+   Confidence: High
+
+10) File: App/lib/presentation/screens/owner/reports_screen.dart
+    Lines: 30 (Selector -> ListView.builder)
+    Why: `Selector` selects outstanding list + loading + error; loading toggles from `guard()` cause selector evaluations and rebuild the `ListView`. Large lists or repeated refreshes double rebuilds per request.
+    Confidence: High
+
+11) File: App/lib/presentation/screens/owner/dashboard_screen.dart
+    Lines: 31 (Selector -> builder), ~80-120 (LineChart, GridView)
+    Why: The dashboard `Selector` selects `dashboard` and `monthlyReport`. The `LineChart` (fl_chart) is a CPU/paint-heavy widget: rebuilding its `spots` and layout repeatedly is expensive. The code wraps the chart in a `RepaintBoundary` which limits repaints but the widget tree still rebuilds on data changes. When `monthlyReport` changes this rebuild is expected; when many `notifyListeners()` calls happen (e.g., other fields causing global OwnerViewModel notifications) the dashboard selector's equality excludes `loading` so it avoids loading-induced rebuilds — this selector is implemented more carefully, but the chart remains an expensive widget to rebuild when data changes.
+    Confidence: Medium-High
+
+12) File: App/lib/presentation/viewmodels/owner_view_model.dart
+    Lines: multiple (refreshDashboard, loadCustomers, methods at ~21-90)
+    Why: Several view model methods chain multiple repo calls and subsequently call `notifyListeners()` via `guard()`. Several user actions (e.g., `addDue`, `recordPayment`, `reduceDue`) call `openCustomer`, `loadCustomers`, and `refreshDashboard()` one after another. These sequential network calls are intentional but are real sources of multiple network requests following a single user action (not a rebuild loop). If UI triggers these methods multiple times due to rebuilds, overall network traffic multiplies.
+    Confidence: High
+
+13) File: App/lib/services/notification_service.dart
+    Lines: 12-26 (initialize, onTokenRefresh subscription)
+    Why: The service subscribes to `FirebaseMessaging.instance.onTokenRefresh` and calls `_authRepository.registerFcmToken` when the token changes; this is correct. I did not find any place in the app that calls `notificationService.initialize()` — the service is constructed in `AppDependencies` but not initialized anywhere, so no repeated token registration occurs at runtime from this service in the present codebase.
+    Confidence: High
+
+14) Provider creation location check
+    File: App/lib/main.dart (lines 28-46)
+    Why: `ChangeNotifierProvider` instances are created only at the app root here. There are no providers created inside frequently rebuilt widgets. Therefore repeated provider creation is not the cause of repeated API calls in this codebase.
+    Confidence: High
+
+15) TextField / keyboard rebuild loops
+    Files checked: multiple (login, register, dialogs, app_text_field)
+    Why: All `TextField` usages either receive controllers stored in state or are stateless form fields. I found no evidence of a build-time loop that re-creates controllers each build or that repeatedly focuses/unfocuses the keyboard. No TextField-induced rebuild loop detected.
+    Confidence: High
+
+16) Infinite rebuild chains
+    Why: I searched for patterns where a widget `build()` triggers a ViewModel method (outside user callbacks) or schedules an immediate side-effect that calls `notifyListeners()`. I found only `addPostFrameCallback` calls inside `initState`, not inside `build`. No infinite rebuild chain was found.
+    Confidence: High
+
+Notes / Root cause summary (verified):
+- The single most actionable cause of extra main-isolate work is the pair of `notifyListeners()` calls inside `BaseViewModel.guard()` (start + end). Every network call from view models causes two notifications; any `Selector` or `Consumer` that rebuilds a large tree (lists, charts) will rebuild twice per request. That is a confirmed source of doubled rebuilds and is the most likely contributor to the observed freezes when many requests and large widgets are present.
+
+- Secondary contributors are the app startup flows: `AuthViewModel.bootstrap()` (called during provider creation in `main.dart`) which causes the top-level `RoleGate` to rebuild and mount the appropriate shell, and the shell `initState` callbacks that immediately call several network methods (`refreshDashboard`, `loadCustomers`, etc.) on mount. These combine to create a burst of network operations at startup.
+
+What I did NOT find (confirmed negatives):
+- No provider instances are created inside frequently rebuilt widgets.
+- No FutureBuilder or Timer-based polling loops that would periodically call APIs.
+- No TextField keyboard-focused rebuild loop.
+- No obvious infinite notify->build->notify cycles in `build()` code.
+
+If you want, I can now produce a concise changelist of minimal, non-architectural mitigations you can apply (examples only, not code changes) to reduce rebuilds and main-isolate work (e.g., coalescing the `notifyListeners()` calls around `guard()`, narrowing selector selection to exclude transient `loading` where appropriate, and deferring non-critical loads). This would be an informational next step only; you asked to avoid code changes in this pass.
+
+End of report.
+
+
+Backend Security and Risk Audit - Problems
+
+Scope: Read-only audit of c:\Flutter projects\my_store\backend. No secrets are recorded.
+
+HIGH - Ledger balance updates are unsafe when MongoDB transactions are unavailable.
+Location: backend/src/services/ledger.service.js, runWithOptionalTransaction and LedgerService.mutateDue; backend/src/repositories/customer.repository.js, updateById.
+Problem: The service reads currentDue, calculates nextDue, then updates the customer in a separate operation. The transaction helper retries without a session when transactions are unsupported.
+Scenario/impact: Concurrent payments or due additions can read the same balance and overwrite one another. Transaction records and balanceAfter values can disagree with the customer balance.
+Confidence: Confirmed.
+Recommendation: Require a replica set or use an atomic conditional update/optimistic concurrency check. Add concurrent ledger tests.
+Priority: P0.
+
+HIGH - Firebase push notifications can be sent before a ledger transaction commits.
+Location: backend/src/services/ledger.service.js, LedgerService.mutateDue; backend/src/services/notification.service.js, createAndPush.
+Problem: FCM is called while the database transaction is still open.
+Scenario/impact: A later database failure can roll back the ledger while the customer has already received a notification for the rolled-back change.
+Confidence: Confirmed.
+Recommendation: Commit database changes first, then dispatch via an outbox or queue with retry and idempotency handling.
+Priority: P1.
+
+MEDIUM - Refresh-token rotation is race-prone.
+Location: backend/src/services/auth.service.js, AuthService.refresh; backend/src/repositories/refreshToken.repository.js, findActiveByHash and revoke.
+Problem: The old token is read, a replacement is created, and revocation happens afterward. The revoke result is not checked.
+Scenario/impact: Two simultaneous refresh requests can both use one refresh token and create valid replacement sessions.
+Confidence: Confirmed.
+Recommendation: Atomically claim/revoke the old token and create its replacement in one transaction. Reject when the revoke affects no document.
+Priority: P1.
+
+MEDIUM - Public owner registration is enabled.
+Location: backend/src/routes/auth.routes.js, POST /register; backend/src/services/auth.service.js, registerOwner.
+Problem: Any unauthenticated caller can create an active owner account.
+Scenario/impact: Unauthorized users can provision owner tenants and use all owner customer and report APIs for those tenants.
+Confidence: Confirmed; intended product policy needs verification.
+Recommendation: Disable public registration after bootstrap or require an invitation/admin provisioning workflow.
+Priority: P1.
+
+MEDIUM - Search input is compiled as an unescaped regular expression.
+Location: backend/src/repositories/customer.repository.js, listForOwner; backend/src/services/report.service.js, outstanding.
+Problem: User-controlled search text is passed to new RegExp without escaping metacharacters.
+Scenario/impact: Regex-heavy input can cause expensive database matching and CPU pressure.
+Confidence: Confirmed.
+Recommendation: Escape input for literal matching, use indexed search, and apply query timeouts.
+Priority: P1.
+
+MEDIUM - Report exports perform expensive in-memory work.
+Location: backend/src/services/export.service.js, outstandingCsv, outstandingExcel, and outstandingPdf.
+Problem: Each export requests up to 10,000 records and builds CSV, Excel, or PDF buffers in memory.
+Scenario/impact: Repeated large exports can consume substantial CPU and memory and destabilize the Node process.
+Confidence: Confirmed.
+Recommendation: Stream or queue exports, enforce a lower maximum, and apply export-specific throttling.
+Priority: P1.
+
+MEDIUM - Rate limiting is process-local.
+Location: backend/src/middleware/rateLimiter.middleware.js, apiRateLimiter and authRateLimiter.
+Problem: The default in-memory store is used.
+Scenario/impact: In a multi-instance deployment, requests distributed across instances bypass the intended aggregate login/API limits.
+Confidence: Confirmed for multi-instance deployments.
+Recommendation: Configure a shared Redis-compatible store and verify proxy/IP configuration.
+Priority: P1.
+
+LOW - FCM tokens are unnecessarily exposed and unbounded.
+Location: backend/src/models/user.model.js, fcmTokens; backend/src/controllers/auth.controller.js, registerFcmToken.
+Problem: User responses can include fcmTokens, and the token array has no count limit.
+Scenario/impact: Device registration identifiers are exposed and repeated registrations can grow user documents.
+Confidence: Confirmed.
+Recommendation: Exclude fcmTokens from public responses, cap the array, and prune stale tokens.
+Priority: P2.
+
+LOW - Customer creation may duplicate password hashes in audit data.
+Location: backend/src/services/customer.service.js, create; backend/src/services/audit.service.js, record.
+Problem: The complete created user document is passed into audit newValue. The document may still contain its password hash despite select:false affecting normal queries.
+Scenario/impact: A database reader could find password hashes duplicated in audit records, increasing offline-cracking exposure.
+Confidence: Likely; verify by inspecting a sanitized audit record.
+Recommendation: Store an explicit allowlist of audit fields and never persist authentication material.
+Priority: P1.
+
+LOW - Upload middleware is inactive and insufficient for future uploads.
+Location: backend/src/middleware/upload.middleware.js, multer configuration.
+Problem: No route currently uses it. If enabled, it trusts the client MIME type and checks no file content signature.
+Scenario/impact: A forged image MIME type could allow malicious content to be accepted.
+Confidence: Confirmed inactive; future risk.
+Recommendation: Remove unused upload support or add content validation, extension policy, authorization, and isolated storage before use.
+Priority: P2.
+
+BUSINESS LOGIC RISK - Credit limit is stored but not enforced.
+Location: backend/src/services/ledger.service.js, LedgerService.mutateDue.
+Problem: addDue never checks customer.creditLimit.
+Scenario/impact: If creditLimit is intended as a hard limit, an owner can record debt above it.
+Confidence: Needs verification because the intended meaning of creditLimit is not documented in the implementation.
+Recommendation: Define the policy explicitly and enforce it atomically if it is a hard limit.
+Priority: P1 if confirmed.
+
+CONFIGURATION AND QUALITY PROBLEMS
+
+- Required MONGO_URI and JWT_ACCESS_SECRET values are not validated at startup: backend/src/config/env.js. Production instances can start with invalid configuration and fail later.
+- JWT_REFRESH_SECRET is configured but unused because refresh tokens are opaque random values: backend/src/config/env.js and backend/src/utils/jwt.js.
+- Swagger and health endpoints are publicly accessible: backend/src/app.js and backend/src/routes/index.js. Confirm this is acceptable in production.
+- No Dockerfile, Render manifest, Procfile, or equivalent deployment manifest was found in backend.
+- npm audit --omit=dev reported six dependency advisories involving body-parser, brace-expansion, fast-uri, fast-xml-parser, js-yaml, and protobufjs. Dependencies were not upgraded.
+- ESLint could not run because ESLint 9 requires an eslint.config.js/mjs/cjs file, which is absent. JavaScript syntax checks passed.
+- Existing tests passed: 2 suites and 3 tests. They do not cover cross-owner access, role isolation, refresh races, concurrent ledger writes, exports, Firebase failure, or credit-limit behavior.
+
+Overall verdict: NOT READY FOR PRODUCTION until the ledger concurrency, transaction/notification ordering, token rotation, registration policy, and production configuration issues are addressed.

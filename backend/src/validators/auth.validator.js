@@ -3,7 +3,8 @@ const { body } = require('express-validator');
 const passwordRule = body('password')
   .isString()
   .isLength({ min: 8, max: 72 })
-  .withMessage('Password must be 8 to 72 characters long');
+  .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/)
+  .withMessage('Password must be 8 to 72 characters and include uppercase, lowercase, number, and special character');
 
 const registerRules = [
   body('name').isString().trim().isLength({ min: 2, max: 100 }).withMessage('Name is required'),
@@ -35,7 +36,8 @@ const changePasswordRules = [
   body('newPassword')
     .isString()
     .isLength({ min: 8, max: 72 })
-    .withMessage('New password must be 8 to 72 characters long')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$/)
+    .withMessage('New password must be 8 to 72 characters and include uppercase, lowercase, number, and special character')
 ];
 
 const fcmTokenRules = [

@@ -87,7 +87,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       label: 'Password',
                       icon: Icons.lock_outline,
                       obscureText: true,
-                      validator: (value) => value == null || value.length < 8 ? 'Minimum 8 characters' : null,
+                      validator: (value) {
+                        final password = value ?? '';
+                        final strong = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,72}$');
+                        return strong.hasMatch(password)
+                            ? null
+                            : 'Use uppercase, lowercase, number, and special character';
+                      },
                     ),
                     const SizedBox(height: 24),
                     Consumer<AuthViewModel>(

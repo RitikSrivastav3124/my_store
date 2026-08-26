@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const AppError = require('../utils/appError');
 const logger = require('../utils/logger');
-const env = require('../config/env');
 
 const normalizeError = (error) => {
   if (error instanceof AppError) return error;
@@ -51,10 +50,6 @@ const errorHandler = (error, _req, res, _next) => {
     message: normalized.message,
     errors: normalized.errors || []
   };
-
-  if (env.nodeEnv !== 'production' && normalized.statusCode >= 500) {
-    body.stack = error.stack;
-  }
 
   res.status(normalized.statusCode).json(body);
 };

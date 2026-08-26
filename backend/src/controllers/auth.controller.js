@@ -24,12 +24,12 @@ exports.refresh = asyncHandler(async (req, res) => {
 });
 
 exports.logout = asyncHandler(async (req, res) => {
-  await AuthService.logout(req.body.refreshToken);
+  await AuthService.logout(req.body.refreshToken, requestContext(req));
   sendSuccess(res, 200, 'Logout successful');
 });
 
 exports.changePassword = asyncHandler(async (req, res) => {
-  await AuthService.changePassword(req.user._id, req.body);
+  await AuthService.changePassword(req.user._id, req.body, requestContext(req));
   sendSuccess(res, 200, 'Password changed successfully');
 });
 

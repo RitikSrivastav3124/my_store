@@ -19,9 +19,16 @@ class AuthViewModel extends BaseViewModel {
   bool get isCustomer => _user?.role == AppConstants.customerRole;
 
   Future<void> bootstrap() async {
-    _user = await _storage.readUser();
-    _refreshToken = await _storage.readRefreshToken();
-    notifyListeners();
+    try {
+      _user = await _storage.readUser();
+      _refreshToken = await _storage.readRefreshToken();
+    } catch (_) {
+      await _storage.clearSession();
+      _user = null;
+      _refreshToken = null;
+    } finally {
+      notifyListeners();
+    }
   }
 
   Future<bool> login(String identifier, String password) async {

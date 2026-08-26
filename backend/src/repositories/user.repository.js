@@ -24,7 +24,7 @@ class UserRepository {
     const normalized = identifier.toLowerCase();
     return User.findOne({
       $or: [{ email: normalized }, { phone: identifier }]
-    }).select('+password');
+    }).select('+password +loginAttempts +lockUntil');
   }
 
   static findDuplicate({ email, phone }, excludeId = null) {
@@ -42,10 +42,48 @@ class UserRepository {
     });
   }
 
+  static recordFailedLogin(userId, maxAttempts, lockMinutes) {
+    const lockUntil = new Date(Date.now() + lockMinutes * 60 * 1000);
+    return User.findByIdAndUpdate(
+      userId,
+      [
+        {
+          $set: {
+            loginAttempts: { $add: [{ $ifNull: ['$loginAttempts', 0] }, 1] }
+          }
+        },
+        {
+          $set: {
+            lockUntil: {
+              $cond: [{ $gte: ['$loginAttempts', maxAttempts] }, lockUntil, '$lockUntil']
+            }
+          }
+        }
+      ],
+      { new: true }
+    ).select('+loginAttempts +lockUntil');
+  }
+
+  static resetLoginFailures(userId) {
+    return User.findByIdAndUpdate(userId, {
+      loginAttempts: 0,
+      lockUntil: null
+    });
+  }
+
   static addFcmToken(userId, token) {
     return User.findByIdAndUpdate(
       userId,
       { $addToSet: { fcmTokens: token } },
+      { new: true, runValidators: true }
+    );
+  }
+
+  static removeFcmTokens(userId, tokens) {
+    if (!tokens.length) return null;
+    return User.findByIdAndUpdate(
+      userId,
+      { $pull: { fcmTokens: { $in: tokens } } },
       { new: true, runValidators: true }
     );
   }

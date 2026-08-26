@@ -40,6 +40,12 @@ const transactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0
+    },
+    requestId: {
+      type: String,
+      trim: true,
+      maxlength: 120,
+      default: null
     }
   },
   {
@@ -53,5 +59,9 @@ const transactionSchema = new mongoose.Schema(
 transactionSchema.index({ customerId: 1, createdAt: -1 });
 transactionSchema.index({ ownerId: 1, createdAt: -1 });
 transactionSchema.index({ ownerId: 1, type: 1 });
+transactionSchema.index(
+  { ownerId: 1, requestId: 1 },
+  { unique: true, partialFilterExpression: { requestId: { $type: 'string' } } }
+);
 
 module.exports = mongoose.model('Transaction', transactionSchema);
