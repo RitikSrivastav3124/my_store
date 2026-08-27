@@ -26,7 +26,7 @@ const runWithOptionalTransaction = async (work) => {
 
 class LedgerService {
   static async mutateDue(ownerId, customerId, payload, type, context = {}) {
-    return runWithOptionalTransaction(async (session) => {
+    const result = await runWithOptionalTransaction(async (session) => {
       const customer = await CustomerRepository.findOwnedById(ownerId, customerId, { session });
       if (!customer) throw new AppError('Customer not found', 404);
 
@@ -44,17 +44,19 @@ class LedgerService {
       }
 
       const isIncrease = type === TRANSACTION_TYPES.DUE_ADDED;
-      const nextDue = isIncrease ? customer.currentDue + amount : customer.currentDue - amount;
-
-      if (nextDue < 0) throw new AppError('Payment or reduction cannot exceed current due', 400);
-
-      const updatedCustomer = await CustomerRepository.updateById(
+      const updatedCustomer = await CustomerRepository.adjustDue(
+        ownerId,
         customerId,
-        {
-          currentDue: nextDue
-        },
+        amount,
+        isIncrease,
         { session }
       );
+
+      if (!updatedCustomer) {
+        throw new AppError('Payment or reduction cannot exceed current due', 400);
+      }
+
+      const nextDue = updatedCustomer.currentDue;
 
       const transaction = await TransactionRepository.create(
         {
@@ -97,25 +99,30 @@ class LedgerService {
         ? `Your due increased by ${amount}. Current due is ${nextDue}.`
         : `A payment/reduction of ${amount} was recorded. Current due is ${nextDue}.`;
 
-      await NotificationService.createAndPush(
-        {
-          userId: customer.userId._id,
-          title,
-          body,
-          data: {
-            customerId,
-            transactionId: transaction._id,
-            type
-          }
-        },
-        { session }
-      );
+      const notification = {
+        userId: customer.userId._id,
+        title,
+        body,
+        data: {
+          customerId,
+          transactionId: transaction._id,
+          type
+        }
+      };
+
+      await NotificationService.create(notification, { session });
 
       return {
         customer: updatedCustomer,
-        transaction
+        transaction,
+        notification
       };
     });
+
+    if (result.notification) await NotificationService.push(result.notification);
+
+    const { notification, ...ledgerResult } = result;
+    return ledgerResult;
   }
 
   static addDue(ownerId, customerId, payload, context = {}) {

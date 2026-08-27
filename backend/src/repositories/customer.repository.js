@@ -29,6 +29,21 @@ class CustomerRepository {
     }).populate('userId', 'name phone email role status');
   }
 
+  static adjustDue(ownerId, customerId, amount, isIncrease, options = {}) {
+    const filter = { _id: customerId, ownerId };
+    if (!isIncrease) filter.currentDue = { $gte: amount };
+
+    return Customer.findOneAndUpdate(
+      filter,
+      { $inc: { currentDue: isIncrease ? amount : -amount } },
+      {
+        new: true,
+        runValidators: true,
+        ...options
+      }
+    ).populate('userId', 'name phone email role status');
+  }
+
   static async listForOwner(ownerId, filters, pagination) {
     const match = {
       ownerId

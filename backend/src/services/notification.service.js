@@ -6,15 +6,17 @@ const AppError = require('../utils/appError');
 const logger = require('../utils/logger');
 
 class NotificationService {
-  static async createAndPush({ userId, title, body, data = {} }, options = {}) {
-    const notification = await NotificationRepository.create({ userId, title, body, data }, options);
+  static create({ userId, title, body, data = {} }, options = {}) {
+    return NotificationRepository.create({ userId, title, body, data }, options);
+  }
 
-    const user = await UserRepository.findById(userId);
-    const tokens = user?.fcmTokens || [];
-    const messaging = getMessaging();
+  static async push({ userId, title, body, data = {} }) {
+    try {
+      const user = await UserRepository.findById(userId);
+      const tokens = user?.fcmTokens || [];
+      const messaging = getMessaging();
 
-    if (messaging && tokens.length) {
-      try {
+      if (messaging && tokens.length) {
         const response = await messaging.sendEachForMulticast({
           tokens,
           notification: {
@@ -34,14 +36,18 @@ class NotificationService {
           }
         });
         if (invalidTokens.length) await UserRepository.removeFcmTokens(userId, invalidTokens);
-      } catch (error) {
-        logger.warn('Failed to deliver push notification', {
-          userId: userId.toString(),
-          error: error.message
-        });
       }
+    } catch (error) {
+      logger.warn('Failed to deliver push notification', {
+        userId: userId.toString(),
+        error: error.message
+      });
     }
+  }
 
+  static async createAndPush(payload, options = {}) {
+    const notification = await this.create(payload, options);
+    await this.push(payload);
     return notification;
   }
 
