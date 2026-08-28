@@ -1,5 +1,6 @@
 const Customer = require('../models/customer.model');
 const { USER_STATUS } = require('../constants/statusCodes');
+const { escapeRegex } = require('../utils/regex');
 
 class CustomerRepository {
   static create(data, options = {}) {
@@ -74,7 +75,7 @@ class CustomerRepository {
     ];
 
     if (filters.search) {
-      const regex = new RegExp(filters.search, 'i');
+      const regex = new RegExp(escapeRegex(filters.search), 'i');
       pipeline.push({
         $match: {
           $or: [{ 'user.name': regex }, { 'user.phone': regex }, { 'user.email': regex }]

@@ -13,14 +13,14 @@ const registerOwner = async () => {
   return response.body.data.accessToken;
 };
 
-const createCustomer = async (token, openingDue = 0) => {
+const createCustomer = async (token, openingDue = 0, details = {}) => {
   const response = await request(app)
     .post('/api/customers')
     .set('Authorization', `Bearer ${token}`)
     .send({
-      name: 'Customer One',
-      phone: '+917777777777',
-      email: 'customer@example.com',
+      name: details.name || 'Customer One',
+      phone: details.phone || '+917777777777',
+      email: details.email || 'customer@example.com',
       password: 'Customer123!',
       creditLimit: 5000,
       openingDue
@@ -191,5 +191,45 @@ describe('Owner customer and ledger APIs', () => {
 
     const customer = await getCustomer(token, customerId);
     expect(customer.body.data.currentDue).toBe(1000);
+  });
+
+  it('treats regex metacharacters as literal text in customer and outstanding searches', async () => {
+    const token = await registerOwner();
+    await createCustomer(token, 100, {
+      name: 'Rahul',
+      phone: '+917777777778',
+      email: 'rahul@example.com'
+    });
+    await createCustomer(token, 100, {
+      name: 'Customer .*',
+      phone: '+917777777779',
+      email: 'literal@example.com'
+    });
+
+    const customerPartialSearch = await request(app)
+      .get('/api/customers')
+      .query({ search: 'rah' })
+      .set('Authorization', `Bearer ${token}`);
+    const customerLiteralSearch = await request(app)
+      .get('/api/customers')
+      .query({ search: '.*' })
+      .set('Authorization', `Bearer ${token}`);
+    const outstandingPartialSearch = await request(app)
+      .get('/api/reports/outstanding')
+      .query({ search: 'rah' })
+      .set('Authorization', `Bearer ${token}`);
+    const outstandingLiteralSearch = await request(app)
+      .get('/api/reports/outstanding')
+      .query({ search: '.*' })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(customerPartialSearch.status).toBe(200);
+    expect(customerPartialSearch.body.data.map((customer) => customer.userId.name)).toEqual(['Rahul']);
+    expect(customerLiteralSearch.status).toBe(200);
+    expect(customerLiteralSearch.body.data.map((customer) => customer.userId.name)).toEqual(['Customer .*']);
+    expect(outstandingPartialSearch.status).toBe(200);
+    expect(outstandingPartialSearch.body.data.map((customer) => customer.name)).toEqual(['Rahul']);
+    expect(outstandingLiteralSearch.status).toBe(200);
+    expect(outstandingLiteralSearch.body.data.map((customer) => customer.name)).toEqual(['Customer .*']);
   });
 });

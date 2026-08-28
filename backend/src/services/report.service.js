@@ -5,6 +5,7 @@ const { USER_STATUS } = require('../constants/statusCodes');
 const { TRANSACTION_TYPES } = require('../constants/transactionTypes');
 const TransactionRepository = require('../repositories/transaction.repository');
 const { buildMeta, buildPagination } = require('../helpers/pagination.helper');
+const { escapeRegex } = require('../utils/regex');
 
 const startOfDay = (date = new Date()) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const endOfDay = (date = new Date()) =>
@@ -111,7 +112,7 @@ class ReportService {
     ];
 
     if (query.search) {
-      const regex = new RegExp(query.search, 'i');
+      const regex = new RegExp(escapeRegex(query.search), 'i');
       pipeline.push({
         $match: {
           $or: [{ 'user.name': regex }, { 'user.phone': regex }, { 'user.email': regex }]
