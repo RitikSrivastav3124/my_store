@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const ROLES = require('../constants/roles');
 const { USER_STATUS } = require('../constants/statusCodes');
 const UserRepository = require('../repositories/user.repository');
@@ -103,31 +104,42 @@ class AuthService {
     if (!refreshToken) throw new AppError('Refresh token is required', 401);
 
     const oldHash = hashToken(refreshToken);
-    const storedToken = await RefreshTokenRepository.findActiveByHash(oldHash);
-    if (!storedToken) throw new AppError('Invalid refresh token', 401);
+    const session = await mongoose.startSession();
 
-    const user = await UserRepository.findById(storedToken.userId);
-    if (!user || user.status !== USER_STATUS.ACTIVE) {
-      throw new AppError('User is not active or does not exist', 401);
+    try {
+      let result;
+      await session.withTransaction(async () => {
+        const nextRefreshToken = generateRefreshToken();
+        const nextHash = hashToken(nextRefreshToken);
+        const storedToken = await RefreshTokenRepository.claimActive(oldHash, nextHash, { session });
+        if (!storedToken) throw new AppError('Invalid refresh token', 401);
+
+        const user = await UserRepository.findById(storedToken.userId, undefined, { session });
+        if (!user || user.status !== USER_STATUS.ACTIVE) {
+          throw new AppError('User is not active or does not exist', 401);
+        }
+
+        await RefreshTokenRepository.create(
+          {
+            userId: user._id,
+            tokenHash: nextHash,
+            expiresAt: getRefreshTokenExpiry(),
+            userAgent: context.userAgent || '',
+            ipAddress: context.ipAddress || ''
+          },
+          { session }
+        );
+
+        result = {
+          user,
+          accessToken: signAccessToken(user),
+          refreshToken: nextRefreshToken
+        };
+      });
+      return result;
+    } finally {
+      await session.endSession();
     }
-
-    const nextRefreshToken = generateRefreshToken();
-    const nextHash = hashToken(nextRefreshToken);
-
-    await RefreshTokenRepository.create({
-      userId: user._id,
-      tokenHash: nextHash,
-      expiresAt: getRefreshTokenExpiry(),
-      userAgent: context.userAgent || '',
-      ipAddress: context.ipAddress || ''
-    });
-    await RefreshTokenRepository.revoke(oldHash, nextHash);
-
-    return {
-      user,
-      accessToken: signAccessToken(user),
-      refreshToken: nextRefreshToken
-    };
   }
 
   static async logout(refreshToken, context = {}) {

@@ -1,8 +1,8 @@
 const RefreshToken = require('../models/refreshToken.model');
 
 class RefreshTokenRepository {
-  static create(data) {
-    return RefreshToken.create(data);
+  static create(data, options = {}) {
+    return RefreshToken.create([data], options).then(([refreshToken]) => refreshToken);
   }
 
   static findActiveByHash(tokenHash) {
@@ -23,6 +23,21 @@ class RefreshTokenRepository {
         replacedByTokenHash: replacementHash
       },
       { new: true }
+    );
+  }
+
+  static claimActive(tokenHash, replacementHash, options = {}) {
+    return RefreshToken.findOneAndUpdate(
+      {
+        tokenHash,
+        revokedAt: null,
+        expiresAt: { $gt: new Date() }
+      },
+      {
+        revokedAt: new Date(),
+        replacedByTokenHash: replacementHash
+      },
+      { new: true, ...options }
     );
   }
 
