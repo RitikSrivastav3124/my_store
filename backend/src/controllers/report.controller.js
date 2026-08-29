@@ -24,22 +24,19 @@ exports.transactions = asyncHandler(async (req, res) => {
 });
 
 exports.exportOutstandingCsv = asyncHandler(async (req, res) => {
-  const csv = await ExportService.outstandingCsv(req.user._id, req.query);
   res.header('Content-Type', 'text/csv');
   res.attachment('outstanding-report.csv');
-  res.send(csv);
+  await ExportService.outstandingCsv(req.user._id, req.query, res);
 });
 
 exports.exportOutstandingExcel = asyncHandler(async (req, res) => {
-  const workbook = await ExportService.outstandingExcel(req.user._id, req.query);
   res.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.attachment('outstanding-report.xlsx');
-  res.send(workbook);
+  await ExportService.outstandingExcel(req.user._id, req.query, res);
 });
 
 exports.exportOutstandingPdf = asyncHandler(async (req, res) => {
-  const pdf = await ExportService.outstandingPdf(req.user._id, req.query);
   res.header('Content-Type', 'application/pdf');
   res.attachment('outstanding-report.pdf');
-  res.send(pdf);
+  await ExportService.outstandingPdf(req.user._id, req.query, res);
 });

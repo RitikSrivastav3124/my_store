@@ -14,7 +14,53 @@ const startOfMonth = (date = new Date()) => new Date(date.getFullYear(), date.ge
 const endOfMonth = (date = new Date()) =>
   new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 
+const OUTSTANDING_EXPORT_LIMIT = 10000;
+const OUTSTANDING_EXPORT_BATCH_SIZE = 500;
+
 const ownerObjectId = (ownerId) => new mongoose.Types.ObjectId(ownerId);
+
+const buildOutstandingPipeline = (ownerId, query) => {
+  const match = {
+    ownerId: ownerObjectId(ownerId),
+    currentDue: { $gt: 0 }
+  };
+
+  const pipeline = [
+    { $match: match },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'userId',
+        foreignField: '_id',
+        as: 'user'
+      }
+    },
+    { $unwind: '$user' },
+    { $match: { 'user.status': { $ne: USER_STATUS.DELETED } } }
+  ];
+
+  if (query.search) {
+    const regex = new RegExp(escapeRegex(query.search), 'i');
+    pipeline.push({
+      $match: {
+        $or: [{ 'user.name': regex }, { 'user.phone': regex }, { 'user.email': regex }]
+      }
+    });
+  }
+
+  return pipeline;
+};
+
+const outstandingProjection = {
+  _id: 1,
+  name: '$user.name',
+  phone: '$user.phone',
+  email: '$user.email',
+  status: '$user.status',
+  currentDue: 1,
+  creditLimit: 1,
+  updatedAt: 1
+};
 
 class ReportService {
   static async dashboard(ownerId) {
@@ -89,36 +135,8 @@ class ReportService {
   }
 
   static async outstanding(ownerId, query) {
-    const owner = ownerObjectId(ownerId);
     const pagination = buildPagination(query);
-
-    const match = {
-      ownerId: owner,
-      currentDue: { $gt: 0 }
-    };
-
-    const pipeline = [
-      { $match: match },
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'userId',
-          foreignField: '_id',
-          as: 'user'
-        }
-      },
-      { $unwind: '$user' },
-      { $match: { 'user.status': { $ne: USER_STATUS.DELETED } } }
-    ];
-
-    if (query.search) {
-      const regex = new RegExp(escapeRegex(query.search), 'i');
-      pipeline.push({
-        $match: {
-          $or: [{ 'user.name': regex }, { 'user.phone': regex }, { 'user.email': regex }]
-        }
-      });
-    }
+    const pipeline = buildOutstandingPipeline(ownerId, query);
 
     const [countRows, customers] = await Promise.all([
       Customer.aggregate([...pipeline, { $count: 'total' }]),
@@ -127,18 +145,7 @@ class ReportService {
         { $sort: pagination.sort },
         { $skip: pagination.skip },
         { $limit: pagination.limit },
-        {
-          $project: {
-            _id: 1,
-            name: '$user.name',
-            phone: '$user.phone',
-            email: '$user.email',
-            status: '$user.status',
-            currentDue: 1,
-            creditLimit: 1,
-            updatedAt: 1
-          }
-        }
+        { $project: outstandingProjection }
       ])
     ]);
 
@@ -146,6 +153,36 @@ class ReportService {
       customers,
       meta: buildMeta({ ...pagination, total: countRows[0]?.total || 0 })
     };
+  }
+
+static async *outstandingExportBatches(ownerId, query, batchSize = OUTSTANDING_EXPORT_BATCH_SIZE) {
+    const pipeline = buildOutstandingPipeline(ownerId, query);
+    const sortBy = query.sortBy || 'createdAt';
+    const sortOrder = query.sortOrder === 'asc' ? 1 : -1;
+    const sort = { [sortBy]: sortOrder };
+
+    // A tie-breaker makes offset batches deterministic when multiple customers share a sort value.
+    if (sortBy !== '_id') sort._id = sortOrder;
+
+    let skip = 0;
+    const exportLimit = OUTSTANDING_EXPORT_LIMIT;
+
+    while (skip < exportLimit) {
+      const customers = await Customer.aggregate([
+        ...pipeline,
+        { $sort: sort },
+        { $skip: skip },
+        { $limit: Math.min(batchSize, exportLimit - skip) },
+        { $project: outstandingProjection }
+      ]);
+
+      if (!customers.length) return;
+
+      yield customers;
+      skip += customers.length;
+
+      if (customers.length < batchSize) return;
+    }
   }
 
   static async transactions(ownerId, query) {
