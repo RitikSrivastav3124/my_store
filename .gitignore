@@ -6,6 +6,7 @@
 Thumbs.db
 .agents/
 .vscode/
+PROJECT_REQUIREMENTS.txt
 
 # Flutter / Dart
 /App/.dart_tool/
