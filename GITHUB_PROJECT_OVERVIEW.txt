@@ -1,0 +1,1324 @@
+============================================================
+KHATA LEDGER
+GitHub Project Overview
+============================================================
+
+DOCUMENT PURPOSE
+------------------------------------------------------------
+
+This document provides a public, GitHub-safe overview of the
+Khata Ledger project.
+
+It describes the project's purpose, architecture, technologies,
+major modules, features, data flow, development practices,
+security principles, and planned improvements.
+
+This document intentionally excludes:
+
+- Passwords
+- API keys
+- JWT secrets
+- Database credentials
+- Firebase private credentials
+- Cloud credentials
+- Access tokens
+- Private deployment URLs
+- Private IP addresses
+- Internal infrastructure configuration
+- User/customer personal data
+- Production environment variables
+- Security-sensitive implementation details
+
+
+============================================================
+1. PROJECT OVERVIEW
+============================================================
+
+Khata Ledger is a full-stack digital ledger application
+designed to help shop/business owners maintain customer credit,
+payments, balances, and transaction history digitally.
+
+The application replaces traditional manual khata/ledger
+management with a centralized digital system.
+
+The project consists of two major applications:
+
+1. Backend
+   - REST API
+   - Authentication
+   - Customer management
+   - Ledger management
+   - Transaction management
+   - Notifications
+   - Reporting
+   - Data export
+   - Audit logging
+
+2. Flutter App
+   - Owner-facing mobile application
+   - Customer-facing functionality
+   - Dashboard
+   - Customer management
+   - Ledger operations
+   - Transaction history
+   - Reports
+   - Notifications
+
+
+============================================================
+2. PROJECT GOALS
+============================================================
+
+Primary goals of the project:
+
+- Digitize traditional customer khata management.
+- Maintain customer outstanding balances.
+- Record credit and payment transactions.
+- Provide customers with visibility into their ledger.
+- Notify customers when ledger activity occurs.
+- Provide owners with reports and analytics.
+- Support export of outstanding customer reports.
+- Maintain reliable and auditable ledger operations.
+- Prevent duplicate transaction processing.
+- Keep the application scalable as transaction volume grows.
+- Follow clean separation between application layers.
+- Build the system with production-oriented practices.
+
+
+============================================================
+3. HIGH-LEVEL ARCHITECTURE
+============================================================
+
+The project follows a client-server architecture.
+
+                    +----------------------+
+                    |      Flutter App     |
+                    |   Mobile Frontend    |
+                    +----------+-----------+
+                               |
+                               | HTTPS / REST API
+                               |
+                    +----------v-----------+
+                    |    Node.js Backend   |
+                    |      REST API        |
+                    +----------+-----------+
+                               |
+              +----------------+----------------+
+              |                |                |
+              v                v                v
+         MongoDB          Notification      Other Services
+         Database           System          / Integrations
+
+
+The Flutter application communicates with the backend through
+REST APIs.
+
+The backend is responsible for:
+
+- Authentication
+- Authorization
+- Business logic
+- Data validation
+- Ledger calculations
+- Transaction creation
+- Notifications
+- Reports
+- Exports
+- Audit logging
+- Database interaction
+
+
+============================================================
+4. TECHNOLOGY STACK
+============================================================
+
+BACKEND
+------------------------------------------------------------
+
+Runtime:
+- Node.js
+
+Framework:
+- Express.js
+
+Database:
+- MongoDB
+
+ODM:
+- Mongoose
+
+Authentication:
+- Token-based authentication
+
+Testing:
+- Jest
+- Supertest
+
+Logging:
+- Winston / application logging
+
+Document generation:
+- PDF generation library
+- ExcelJS
+
+API architecture:
+- REST API
+
+
+FRONTEND
+------------------------------------------------------------
+
+Framework:
+- Flutter
+
+Language:
+- Dart
+
+Architecture:
+- MVVM-oriented application structure
+
+State management:
+- Provider
+
+Backend communication:
+- REST API
+
+Cloud services/integrations used by the application may include
+Firebase-based services where applicable.
+
+
+DEVELOPMENT / INFRASTRUCTURE
+------------------------------------------------------------
+
+Version control:
+- Git
+- GitHub
+
+Database hosting:
+- MongoDB-compatible cloud database
+
+Backend deployment:
+- Cloud hosting compatible with Node.js
+
+Mobile deployment:
+- Android
+
+
+============================================================
+5. CORE FUNCTIONALITIES
+============================================================
+
+5.1 AUTHENTICATION
+------------------------------------------------------------
+
+The application provides authentication functionality for users.
+
+Supported functionality includes:
+
+- User registration
+- User login
+- Token-based authentication
+- Token refresh
+- Authentication-protected API endpoints
+- Role-based access where applicable
+
+
+5.2 USER ROLES
+------------------------------------------------------------
+
+The system distinguishes between different types of users.
+
+The primary business roles include:
+
+- Owner
+- Customer
+
+Owner users can manage their customers and ledger operations.
+
+Customer users can access information associated with their
+own account.
+
+
+5.3 CUSTOMER MANAGEMENT
+------------------------------------------------------------
+
+Owners can manage customer accounts.
+
+Customer functionality includes:
+
+- Creating customers
+- Viewing customers
+- Searching customers
+- Managing customer information
+- Maintaining credit limits
+- Viewing current outstanding balance
+- Customer-specific ledger access
+
+
+5.4 LEDGER MANAGEMENT
+------------------------------------------------------------
+
+The ledger is the core business functionality of the application.
+
+Supported ledger operations include:
+
+- Adding due
+- Recording payment
+- Reducing due
+- Maintaining current outstanding balance
+- Recording transaction history
+- Tracking balance after each transaction
+
+
+The current balance is maintained separately from historical
+transactions so that the application can quickly determine the
+customer's current outstanding amount.
+
+
+5.5 TRANSACTION MANAGEMENT
+------------------------------------------------------------
+
+Transactions contain information such as:
+
+- Customer reference
+- Owner reference
+- Transaction type
+- Amount
+- Description
+- Payment method
+- Balance after transaction
+- Request identifier where applicable
+- Creation timestamp
+
+
+Transaction types are controlled using predefined application
+constants.
+
+
+5.6 IDEMPOTENCY
+------------------------------------------------------------
+
+The backend supports request-level idempotency for ledger
+mutations.
+
+A request identifier can be used to prevent accidental duplicate
+processing when the same operation is submitted more than once.
+
+This is particularly useful for:
+
+- Network retries
+- Client retries
+- Duplicate requests
+- Unstable connections
+
+
+============================================================
+6. LEDGER CONSISTENCY
+============================================================
+
+Ledger mutations are designed to keep the customer's current
+balance and transaction record consistent.
+
+A typical ledger mutation follows this conceptual flow:
+
+1. Authenticate the owner.
+2. Verify that the customer belongs to the owner.
+3. Validate the requested operation.
+4. Check for an existing idempotent request.
+5. Calculate/update the customer's current due.
+6. Create the corresponding transaction.
+7. Record an audit entry.
+8. Create the relevant notification.
+9. Deliver the notification after the ledger operation.
+
+
+Where supported by the database environment, database transaction
+mechanisms are used to group related operations.
+
+The application also contains fallback behavior for environments
+where MongoDB transaction support is unavailable.
+
+
+============================================================
+7. CURRENT DUE VS TRANSACTION HISTORY
+============================================================
+
+The Customer record maintains the current outstanding balance.
+
+The Transaction collection maintains historical ledger events.
+
+Conceptually:
+
+Customer.currentDue
+    |
+    +---- Current outstanding amount
+    |
+    +---- Used for fast balance access
+
+
+Transaction
+    |
+    +---- Historical ledger event
+    +---- Amount
+    +---- Transaction type
+    +---- Balance after transaction
+    +---- Timestamp
+
+
+This separation allows the application to retrieve the current
+balance efficiently without calculating the entire transaction
+history every time.
+
+
+============================================================
+8. NOTIFICATION SYSTEM
+============================================================
+
+The application supports customer notifications for ledger
+activities.
+
+Examples include:
+
+- Due amount increased
+- Payment recorded
+- Due reduced
+
+
+The system separates notification creation from notification
+delivery where appropriate.
+
+This helps prevent external notification delivery from becoming
+part of the critical ledger response path.
+
+
+============================================================
+9. AUDIT LOGGING
+============================================================
+
+Important ledger operations are auditable.
+
+Audit records can contain information such as:
+
+- Action performed
+- User who performed the action
+- Target customer
+- Previous value
+- New value
+- Request identifier
+- Request metadata where applicable
+
+
+Audit logging is intended to improve:
+
+- Traceability
+- Accountability
+- Debugging
+- Operational monitoring
+- Security investigation
+
+
+Audit data should not be exposed publicly and should never be
+included in public documentation with real user information.
+
+
+============================================================
+10. REPORTING
+============================================================
+
+The backend provides reporting functionality.
+
+Current reporting areas include:
+
+- Dashboard analytics
+- Monthly collection reports
+- Outstanding customer reports
+- Transaction reports
+
+
+Dashboard information can include:
+
+- Total customers
+- Active customers
+- Total outstanding amount
+- Today's collection
+- Monthly collection
+
+
+============================================================
+11. OUTSTANDING REPORT
+============================================================
+
+Outstanding customer reporting identifies customers who currently
+have a positive outstanding balance.
+
+The report supports functionality such as:
+
+- Customer search
+- Pagination
+- Sorting
+- Owner-specific filtering
+- Excluding deleted users
+- Exporting report data
+
+
+Search input is handled as literal search text rather than allowing
+raw regular-expression input to become executable query logic.
+
+
+============================================================
+12. DATA EXPORT
+============================================================
+
+Outstanding customer reports can be exported into multiple formats.
+
+Supported formats include:
+
+- CSV
+- Excel
+- PDF
+
+
+Export processing is designed to avoid loading the complete result
+set into memory at once.
+
+The backend processes export data in batches.
+
+Current export behavior intentionally limits the number of
+outstanding records processed by an export request.
+
+Current configured maximum:
+
+10,000 records
+
+
+Current batch size:
+
+500 records
+
+
+This limit is intentional and may be revised later if business
+requirements change.
+
+
+============================================================
+13. EXPORT PERFORMANCE
+============================================================
+
+Large exports are processed incrementally.
+
+The backend uses batch-based retrieval instead of attempting to
+load all matching records into application memory simultaneously.
+
+This approach helps reduce:
+
+- Memory usage
+- Large response buffering
+- Application-level memory pressure
+
+
+CSV exports are streamed.
+
+Excel exports use a streaming workbook writer.
+
+PDF generation processes records progressively.
+
+
+============================================================
+14. DATABASE MODELS
+============================================================
+
+Primary backend data models include:
+
+USER
+------------------------------------------------------------
+
+Responsible for user identity and account-related information.
+
+Relevant concepts include:
+
+- Name
+- Phone
+- Email
+- Role
+- Status
+- Authentication-related information
+
+
+CUSTOMER
+------------------------------------------------------------
+
+Represents the relationship between an owner and a customer.
+
+Important fields include:
+
+- ownerId
+- userId
+- creditLimit
+- currentDue
+- notes
+- timestamps
+
+
+TRANSACTION
+------------------------------------------------------------
+
+Represents a ledger transaction.
+
+Important fields include:
+
+- customerId
+- ownerId
+- type
+- amount
+- description
+- paymentMethod
+- balanceAfter
+- requestId
+- createdAt
+
+
+AUDIT LOG
+------------------------------------------------------------
+
+Stores records required for operational/audit traceability.
+
+
+NOTIFICATION
+------------------------------------------------------------
+
+Stores application notification records before/during delivery.
+
+
+============================================================
+15. DATABASE INDEXING
+============================================================
+
+Indexes are used on frequently queried fields to improve database
+performance.
+
+Examples include indexes associated with:
+
+- Customer ownership
+- Customer balance
+- Customer creation time
+- Customer transaction history
+- Transaction ownership
+- Transaction creation time
+- Transaction type
+- Idempotency request identifiers
+
+
+Indexes should be reviewed periodically as the application's query
+patterns and data volume evolve.
+
+
+============================================================
+16. SEARCH SECURITY
+============================================================
+
+Search functionality must not directly interpret arbitrary user
+input as a regular expression.
+
+Search values are escaped before being used in regex-based search
+operations.
+
+This prevents unintended regex behavior and reduces the risk of
+regex-based query abuse.
+
+
+============================================================
+17. API SECURITY PRINCIPLES
+============================================================
+
+The backend follows these general security principles:
+
+- Authentication is required for protected resources.
+- Authorization must verify ownership before modifying ledger data.
+- Users should only access resources they are permitted to access.
+- Request data should be validated.
+- Sensitive configuration must be provided through environment
+  variables.
+- Secrets must never be committed to source control.
+- Database credentials must never be hard-coded.
+- Private tokens must never be exposed in documentation.
+- Production error responses should avoid leaking sensitive
+  implementation details.
+- Database queries should use validated/controlled fields.
+- User-provided search input should be safely handled.
+
+
+============================================================
+18. CONFIGURATION AND SECRETS
+============================================================
+
+Sensitive configuration belongs in environment variables.
+
+Examples of sensitive configuration that must NOT be committed:
+
+- Database connection strings
+- JWT/token secrets
+- Firebase private credentials
+- Cloud provider credentials
+- API keys
+- Private service credentials
+- Production URLs where sensitive
+- Encryption keys
+- Signing keys
+
+
+Public repositories should contain only safe example configuration,
+such as an appropriately sanitized:
+
+.env.example
+
+
+The actual .env files must remain excluded from Git.
+
+
+============================================================
+19. GITHUB SECURITY RULES
+============================================================
+
+The following files/data should NOT be committed to a public
+repository:
+
+- .env
+- .env.production
+- .env.local
+- API keys
+- Access tokens
+- Private certificates
+- Private keys
+- Database credentials
+- Firebase service-account credentials
+- Production secrets
+- Personal customer data
+- Authentication tokens
+- Debug dumps containing secrets
+- Local machine configuration
+- Generated credentials
+
+
+Before pushing code to GitHub, verify:
+
+1. No secrets are present in source files.
+2. No real database credentials are present.
+3. No production tokens are present.
+4. No customer/user data is present.
+5. No private credentials are present in documentation.
+6. .gitignore excludes sensitive local files.
+
+
+============================================================
+20. TESTING
+============================================================
+
+The backend contains automated tests using Jest and Supertest.
+
+Testing areas include:
+
+- Authentication
+- Customer ledger operations
+- Notifications
+- Ledger notification behavior
+- Report exports
+
+
+Integration tests verify API behavior through HTTP requests.
+
+Export integration tests verify:
+
+- CSV export
+- Excel export
+- PDF export
+- Search filtering
+- Deleted-user exclusion
+- Large result processing
+- Export limits
+- Expected headers/content types
+
+
+The project should maintain automated test coverage for critical
+ledger functionality before major production changes are merged.
+
+
+============================================================
+21. CURRENT EXPORT LIMIT
+============================================================
+
+Outstanding exports currently have a maximum processing limit of:
+
+10,000 records.
+
+
+This is an intentional application-level safeguard.
+
+The limit prevents a single export request from attempting to process
+an unbounded amount of data.
+
+Any future increase should consider:
+
+- Database load
+- Application memory
+- Request duration
+- Response size
+- Concurrent exports
+- Cloud infrastructure limitations
+
+
+============================================================
+22. DATA RETENTION STRATEGY
+============================================================
+
+The project is being designed with long-term data growth in mind.
+
+Transaction data is expected to grow continuously as businesses
+record ledger activity.
+
+The current planned retention policy is:
+
+- Keep recent transaction history in the primary database.
+- Archive older transaction history.
+- Preserve current customer balance independently.
+- Avoid deleting historical financial information without an
+  appropriate archive strategy.
+
+
+Current agreed retention concept:
+
+Recent transaction history:
+90 days
+
+
+Transactions older than the retention cutoff:
+Eligible for archival
+
+
+The retention cutoff is based on:
+
+Current time - exactly 90 days
+
+
+The archive system is a planned scalability feature and should be
+implemented carefully so that archiving historical transactions
+does not alter the customer's currentDue.
+
+
+============================================================
+23. PLANNED ARCHIVE SYSTEM
+============================================================
+
+The planned archive lifecycle is conceptually:
+
+ACTIVE
+   |
+   | transaction reaches retention cutoff
+   v
+ELIGIBLE_FOR_ARCHIVE
+   |
+   | archive job
+   v
+ARCHIVED
+   |
+   | optional verification
+   v
+REMOVED_FROM_PRIMARY_DATABASE
+
+
+The archive mechanism should ensure:
+
+- No change to currentDue
+- No accidental deletion of active transactions
+- No loss of historical records
+- Owner/customer relationships remain recoverable
+- Archived records remain identifiable
+- Archive operations are idempotent
+- Failed archive operations can be retried safely
+
+
+The archive storage implementation is intentionally not specified
+in this public document.
+
+
+============================================================
+24. DATABASE SCALABILITY
+============================================================
+
+The application is designed with the understanding that transaction
+volume can grow significantly over time.
+
+Potential scalability techniques include:
+
+- Proper indexing
+- Pagination
+- Batch processing
+- Streaming exports
+- Transaction retention
+- Historical data archival
+- Object storage for archived data
+- Database query optimization
+- Background jobs
+- Monitoring and capacity planning
+
+
+The application should avoid unnecessary permanent storage of data
+that does not need to remain in the primary operational database.
+
+
+============================================================
+25. OBJECT STORAGE ARCHIVING
+============================================================
+
+For large historical datasets, object storage can be considered
+instead of keeping all archived transaction records inside the
+primary MongoDB database.
+
+Object storage is suitable for:
+
+- Large historical datasets
+- Export files
+- Archived transaction batches
+- Long-term storage
+
+
+The archive architecture may eventually separate:
+
+Operational data:
+MongoDB
+
+
+Historical/archive data:
+Object storage or another dedicated archival system
+
+
+The exact provider and implementation should be configured through
+environment variables and must not expose credentials publicly.
+
+
+============================================================
+26. FRONTEND APPLICATION
+============================================================
+
+The Flutter application provides the user interface for the ledger
+system.
+
+Major frontend areas include:
+
+- Authentication
+- Owner dashboard
+- Customer management
+- Customer details
+- Ledger operations
+- Transaction history
+- Reports
+- Notifications
+
+
+The application communicates with backend APIs rather than directly
+modifying the database.
+
+
+============================================================
+27. FRONTEND ARCHITECTURE
+============================================================
+
+The Flutter application follows a layered architecture with
+MVVM-oriented patterns.
+
+Typical separation includes:
+
+- Presentation/UI
+- View models/state management
+- Domain/application logic
+- Data/repository layer
+- Network/API layer
+
+
+Provider is used for state management where applicable.
+
+
+The frontend should not contain:
+
+- Database credentials
+- Backend secrets
+- Private API credentials
+- Administrative credentials
+- Server-side business secrets
+
+
+============================================================
+28. BACKEND ARCHITECTURE
+============================================================
+
+The backend follows a layered service-oriented structure.
+
+Major layers include:
+
+Controllers
+------------------------------------------------------------
+
+Responsible for handling HTTP requests and responses.
+
+
+Services
+------------------------------------------------------------
+
+Responsible for business logic.
+
+
+Repositories
+------------------------------------------------------------
+
+Responsible for database access and persistence operations.
+
+
+Models
+------------------------------------------------------------
+
+Responsible for MongoDB/Mongoose data structures.
+
+
+Helpers / Utilities
+------------------------------------------------------------
+
+Provide reusable functionality such as:
+
+- Pagination
+- Validation
+- Error handling
+- Regex escaping
+- Response formatting
+
+
+This separation improves:
+
+- Maintainability
+- Testability
+- Reusability
+- Scalability
+
+
+============================================================
+29. ERROR HANDLING
+============================================================
+
+The backend uses centralized/asynchronous error handling patterns.
+
+API errors should provide appropriate HTTP status codes and safe
+messages.
+
+Production errors should not expose:
+
+- Stack traces
+- Database credentials
+- Internal secrets
+- Private infrastructure information
+- Sensitive implementation details
+
+
+Detailed errors should be available through controlled server-side
+logging where appropriate.
+
+
+============================================================
+30. OBSERVABILITY
+============================================================
+
+Application logging is used for operational visibility.
+
+Production monitoring should eventually cover:
+
+- API errors
+- Database failures
+- Slow requests
+- Export failures
+- Background job failures
+- Archive failures
+- Notification failures
+- Authentication failures
+- Resource utilization
+
+
+Logs must not contain:
+
+- Passwords
+- Authentication tokens
+- API secrets
+- Private credentials
+- Sensitive customer information unless strictly required
+
+
+============================================================
+31. PRODUCTION PRINCIPLES
+============================================================
+
+Before production release, the project should prioritize:
+
+- Correctness
+- Security
+- Data consistency
+- Availability
+- Performance
+- Observability
+- Maintainability
+- Safe deployments
+- Automated testing
+- Backup and recovery
+
+
+Critical financial/ledger operations should be treated as
+high-integrity operations.
+
+
+============================================================
+32. DATA INTEGRITY PRINCIPLES
+============================================================
+
+The following principles are important for the ledger:
+
+1. currentDue must represent the current outstanding balance.
+2. Ledger mutations must be validated.
+3. Payment/reduction must not exceed the applicable due.
+4. Transactions must record the resulting balance.
+5. Duplicate requests must not create duplicate ledger mutations.
+6. Historical transaction data must not be silently modified.
+7. Archive operations must not modify currentDue.
+8. Owner/customer isolation must always be enforced.
+9. Deleted users must be handled consistently.
+10. Financial records should not be physically deleted casually.
+
+
+============================================================
+33. OWNER DATA ISOLATION
+============================================================
+
+Owner-specific data must remain isolated.
+
+A request belonging to one owner must not be able to access or
+modify another owner's customers or transactions.
+
+Ownership checks must be performed on the backend.
+
+Client-side checks alone are NOT considered sufficient security.
+
+
+============================================================
+34. DEPLOYMENT
+============================================================
+
+The backend is designed to run in a Node.js-compatible cloud
+environment.
+
+The Flutter application can be built for Android.
+
+Production configuration should be supplied through secure
+environment/configuration management.
+
+Deployment credentials must never be committed to GitHub.
+
+
+============================================================
+35. DEVELOPMENT WORKFLOW
+============================================================
+
+Recommended development workflow:
+
+1. Create a feature branch.
+2. Implement the change.
+3. Add/update automated tests.
+4. Run the complete test suite.
+5. Review security implications.
+6. Review database impact.
+7. Review API compatibility.
+8. Review frontend/backend compatibility.
+9. Review performance implications.
+10. Commit the change.
+11. Open a pull request.
+12. Review before merging.
+
+
+============================================================
+36. CHANGE MANAGEMENT
+============================================================
+
+Changes affecting the following areas require additional care:
+
+- Authentication
+- Authorization
+- Ledger calculations
+- Transactions
+- currentDue
+- Database schemas
+- Data retention
+- Archive operations
+- Notifications
+- API contracts
+- Export behavior
+
+
+Such changes should include appropriate automated tests.
+
+
+============================================================
+37. KNOWN SCALABILITY CONSIDERATIONS
+============================================================
+
+As usage grows, the following areas require monitoring:
+
+- Transaction collection size
+- Notification collection size
+- Audit log collection size
+- Database storage utilization
+- Database indexes
+- Export workload
+- Large customer datasets
+- Concurrent requests
+- Background jobs
+- Archive volume
+
+
+Retention and archival systems are planned to prevent historical
+data from unnecessarily consuming primary operational database
+storage.
+
+
+============================================================
+38. FUTURE IMPROVEMENTS
+============================================================
+
+Potential future improvements include:
+
+- Automated transaction archival
+- Object-storage-based historical archives
+- Scheduled background jobs
+- Improved monitoring
+- Advanced analytics
+- More export formats
+- Better reporting
+- Database performance optimization
+- Improved notification reliability
+- Backup/recovery automation
+- Rate limiting improvements
+- Advanced security monitoring
+- Operational dashboards
+
+
+Future improvements should preserve backward compatibility and
+existing ledger correctness unless a deliberate migration is
+performed.
+
+
+============================================================
+39. PUBLIC REPOSITORY SAFETY
+============================================================
+
+This project may be published as a public GitHub repository.
+
+The repository should contain:
+
+- Source code
+- Public documentation
+- Sanitized configuration examples
+- Tests
+- Architecture documentation
+- Development instructions
+
+
+The repository should NOT contain:
+
+- Real credentials
+- Secrets
+- Tokens
+- Private certificates
+- Production database URLs
+- Real customer records
+- Real authentication data
+- Private deployment configuration
+
+
+Any example credentials shown in documentation must be clearly
+non-functional placeholders.
+
+
+============================================================
+40. PROJECT STATUS
+============================================================
+
+The project is actively under development.
+
+Core areas currently implemented include:
+
+- Authentication
+- Customer management
+- Ledger operations
+- Transaction management
+- Notifications
+- Audit logging
+- Reporting
+- Outstanding reports
+- CSV export
+- Excel export
+- PDF export
+- Automated backend testing
+
+
+Scalability improvements such as transaction archival are planned
+as subsequent development phases.
+
+
+============================================================
+41. IMPORTANT DEVELOPMENT RULE
+============================================================
+
+Existing business behavior should not be changed unintentionally.
+
+When implementing new functionality:
+
+- Preserve existing API contracts where possible.
+- Preserve current ledger calculations.
+- Preserve currentDue semantics.
+- Preserve idempotency behavior.
+- Preserve owner/customer authorization.
+- Preserve notification behavior unless intentionally changed.
+- Preserve existing test expectations.
+- Add regression tests for changed behavior.
+
+
+Any migration affecting existing data must be explicitly planned,
+tested, and reversible where practical.
+
+
+============================================================
+42. SUMMARY
+============================================================
+
+Khata Ledger is a full-stack digital ledger platform built using
+Flutter, Node.js, Express.js, MongoDB, and Mongoose.
+
+The system provides:
+
+- Secure user authentication
+- Owner/customer management
+- Digital ledger management
+- Transaction recording
+- Current balance tracking
+- Customer notifications
+- Audit logging
+- Reporting
+- Data export
+- Automated testing
+- Production-oriented data consistency mechanisms
+
+
+The project is designed to evolve from a small-scale ledger
+application into a scalable production system.
+
+A major upcoming scalability feature is historical transaction
+archival, where recent transactions remain in the operational
+database while older records are moved to dedicated archive
+storage without affecting the customer's current balance.
+
+
+============================================================
+END OF DOCUMENT
+============================================================
