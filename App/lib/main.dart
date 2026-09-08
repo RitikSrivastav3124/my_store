@@ -4,6 +4,7 @@ import 'config/app_config.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/customer/customer_shell_screen.dart';
 import 'presentation/screens/owner/owner_shell_screen.dart';
+import 'presentation/screens/splash/splash_screen.dart';
 import 'presentation/themes/app_theme.dart';
 import 'presentation/viewmodels/auth_view_model.dart';
 import 'presentation/viewmodels/customer_view_model.dart';
@@ -54,7 +55,7 @@ class KhataLedgerApp extends StatelessWidget {
           themeMode: theme.themeMode,
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
-          home: const _RoleGate(),
+          home: const SplashScreen(child: _RoleGate()),
         ),
       ),
     );
