@@ -15,7 +15,12 @@ import 'notification_service.dart';
 class AppDependencies {
   AppDependencies() {
     storage = SecureStorageService();
-    apiClient = ApiClient(tokenReader: storage.readAccessToken);
+    apiClient = ApiClient(
+      tokenReader: storage.readAccessToken,
+      refreshTokenReader: storage.readRefreshToken,
+      tokenWriter: storage.updateTokens,
+      sessionClearer: storage.clearSession,
+    );
     authRepository = AuthRepositoryImpl(AuthRemoteDataSource(apiClient), storage);
     ledgerRepository = LedgerRepositoryImpl(LedgerRemoteDataSource(apiClient));
     notificationRepository = NotificationRepositoryImpl(NotificationRemoteDataSource(apiClient));

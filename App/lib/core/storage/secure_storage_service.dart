@@ -41,6 +41,14 @@ class SecureStorageService {
 
   Future<String?> readRefreshToken() => _safeRead(_refreshTokenKey);
 
+  Future<void> updateTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    await _storage.write(key: _accessTokenKey, value: accessToken);
+    await _storage.write(key: _refreshTokenKey, value: refreshToken);
+  }
+
   Future<AppUser?> readUser() async {
     try {
       final raw = await _safeRead(_userKey);
