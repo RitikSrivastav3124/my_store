@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../viewmodels/auth_view_model.dart';
 import '../../viewmodels/theme_view_model.dart';
+import 'change_password_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -51,6 +52,17 @@ class SettingsScreen extends StatelessWidget {
                   title: const Text('Dark theme'),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.lock_outline),
+              title: const Text('Change Password'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+              ),
             ),
           ),
           const SizedBox(height: 12),
